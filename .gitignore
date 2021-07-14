@@ -1,4 +1,5 @@
 data/
 results/
+venv/
 dataset*.p
 metric_results*.p
