@@ -1,6 +1,15 @@
 import torch
 
-train_configs = [{'style': 'SynthAttention', 'name': 'diffsep_anw1', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.CrossEntropyLoss,
+VERB_IDX = 3
+
+train_configs = [{'name': 'diffsep_anw1', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.NLLLoss,
+                  'freeze': True, 'bert_model': 'GroNLP/bert-base-dutch-cased', 'epochs': 7, 'batch_size': 10, 'run': 1},
+                 {'name': 'diffsep_anw2', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.NLLLoss,
+                  'freeze': True, 'bert_model': 'GroNLP/bert-base-dutch-cased', 'epochs': 7, 'batch_size': 10, 'run': 1},
+                 {'name': 'diffsep_anw3', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.NLLLoss,
+                  'freeze': True, 'bert_model': 'GroNLP/bert-base-dutch-cased', 'epochs': 7, 'batch_size': 10, 'run': 1}]
+
+train_configs____ = [{'style': 'SynthAttention', 'name': 'diffsep_anw1', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.CrossEntropyLoss,
                   'freeze': True, 'bert_model': 'GroNLP/bert-base-dutch-cased', 'epochs': 7, 'batch_size': 10, 'run': 1},
                  {'style': 'SynthAttention', 'name': 'diffsep_anw2', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.CrossEntropyLoss,
                   'freeze': True, 'bert_model': 'GroNLP/bert-base-dutch-cased', 'epochs': 7, 'batch_size': 10, 'run': 1},

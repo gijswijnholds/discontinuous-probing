@@ -5,8 +5,9 @@ from torch.nn.utils.rnn import pad_sequence as _pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from torch import LongTensor, Tensor, tensor, long, no_grad, stack, load, cat
 from typing import List, Tuple, Callable, Any
+from itertools import zip_longest
 
-Sample = Tuple[List[str], List[int], List[int], int]
+Sample = Tuple[List[int], List[int], List[int], List[List[int]], int]
 Samples = List[Sample]
 
 # [1, 1, 0, 0, 2, 0, 0, 3, 3, V, V] ->
@@ -16,10 +17,15 @@ Samples = List[Sample]
 
 def sequence_collator(word_pad: int) -> Callable[[Samples], Tuple[LongTensor, LongTensor]]:
     def collate_fn(samples: Samples) -> tuple[Any, Any, Any, Any, Tensor]:
-        input_ids, attention_masks, subj_spans, obj_spans, ys = list(zip(*samples))
+        input_ids, attention_masks, verb_spans, spanss, ys = list(zip(*samples))
+        max_span = max(map(len, spanss))
+        candidate_masks = torch.zeros(len(input_ids), max_span)         # batch_size x num_candidates
+        for i, spans in enumerate(spanss):
+            candidate_masks[i, :len(spans)] = 1
         return (_pad_sequence([tensor(i, dtype=long) for i in input_ids], batch_first=True, padding_value=word_pad),
                 _pad_sequence([tensor(m, dtype=long) for m in attention_masks], batch_first=True, padding_value=0),
                 _pad_sequence([tensor(vs, dtype=long) for vs in verb_spans], batch_first=True, padding_value=0),
+                candidate_masks,
                 [_pad_sequence([tensor(ss, dtype=long) for ss in spans], batch_first=True, padding_value=0) for spans in list(zip_longest(*spanss, fillvalue=[]))],
                 stack([tensor(y, dtype=long) for y in ys], dim=0))
 
@@ -57,9 +63,10 @@ class Trainer():
         self.loss_fn = loss_fn
 
     def train_batch(self, input_ids: LongTensor, input_masks: LongTensor,
-                    subj_tags: LongTensor, obj_tags: LongTensor, ys: LongTensor):
+                    verb_tags: LongTensor, candidate_masks: LongTensor, candidate_tags: List[LongTensor],
+                    ys: LongTensor):
         self.model.train()
-        predictions = self.model.forward(input_ids, input_masks, subj_tags, obj_tags)
+        predictions = self.model.forward(input_ids, input_masks, verb_tags, candidate_masks, candidate_tags)
         batch_loss = self.loss_fn(predictions, ys)
         accuracy = compute_accuracy(predictions, ys)
 
@@ -72,15 +79,16 @@ class Trainer():
         epoch_loss, epoch_accuracy = 0., 0.
         batch_counter = 0
         with tqdm(self.train_loader, unit="batch") as tepoch:
-            for input_ids, input_masks, subj_tags, obj_tags, ys in tepoch:
+            for input_ids, input_masks, verb_tags, candidate_masks, candidate_tags, ys in tepoch:
                 tepoch.set_description(f"Epoch {epoch_i}")
 
                 input_ids.to(device)
                 input_masks.to(device)
-                subj_tags.to(device)
-                obj_tags.to(device)
+                verb_tags.to(device)
+                candidate_masks.to(device)
+                [tags.to(device) for tags in candidate_tags]
                 ys.to(device)
-                loss, accuracy = self.train_batch(input_ids, input_masks, subj_tags, obj_tags, ys)
+                loss, accuracy = self.train_batch(input_ids, input_masks, verb_tags, candidate_masks, candidate_tags, ys)
 
                 tepoch.set_postfix(loss=loss, accuracy=accuracy.item())
 
@@ -90,10 +98,11 @@ class Trainer():
 
     @no_grad()
     def eval_batch(self, input_ids: LongTensor, input_masks: LongTensor,
-                   subj_tags: LongTensor, obj_tags: LongTensor, ys: LongTensor):
+                   verb_tags: LongTensor, candidate_masks: LongTensor, candidate_tags: List[LongTensor],
+                   ys: LongTensor):
         self.model.eval()
 
-        predictions = self.model.forward(input_ids, input_masks, subj_tags, obj_tags)
+        predictions = self.model.forward(input_ids, input_masks, verb_tags, candidate_masks, candidate_tags)
         batch_loss = self.loss_fn(predictions, ys)
         accuracy = compute_accuracy(predictions, ys)
 
@@ -104,15 +113,16 @@ class Trainer():
         loader = {'train': self.train_loader, 'val': self.val_loader, 'test': self.test_loader}[eval_set]
         batch_counter = 0
         with tqdm(loader, unit="batch") as tepoch:
-            for input_ids, input_masks, subj_tags, obj_tags, ys in tepoch:
+            for input_ids, input_masks, verb_tags, candidate_masks, candidate_tags, ys in tepoch:
                 tepoch.set_description(f"Epoch {epoch_i}")
                 batch_counter += 1
                 input_ids.to(device)
                 input_masks.to(device)
-                subj_tags.to(device)
-                obj_tags.to(device)
+                verb_tags.to(device)
+                candidate_masks.to(device)
+                [tags.to(device) for tags in candidate_tags]
                 ys.to(device)
-                loss, accuracy = self.eval_batch(input_ids, input_masks, subj_tags, obj_tags, ys)
+                loss, accuracy = self.eval_batch(input_ids, input_masks, verb_tags, candidate_masks, candidate_tags, ys)
                 tepoch.set_postfix(loss=loss, accuracy=accuracy.item())
                 epoch_loss += loss
                 epoch_accuracy += accuracy
@@ -120,10 +130,11 @@ class Trainer():
 
     @no_grad()
     def predict_batch(self, input_ids: LongTensor, input_masks: LongTensor,
-                      subj_tags: LongTensor, obj_tags: LongTensor, ys: LongTensor):
+                      verb_tags: LongTensor, candidate_masks: LongTensor, candidate_tags: List[LongTensor],
+                      ys: LongTensor):
         self.model.eval()
 
-        predictions = self.model.forward(input_ids, input_masks, subj_tags, obj_tags)
+        predictions = self.model.forward(input_ids, input_masks, verb_tags, candidate_masks, candidate_tags)
         batch_loss = self.loss_fn(predictions, ys)
         accuracy = compute_accuracy(predictions, ys)
 
@@ -135,15 +146,16 @@ class Trainer():
         loader = {'train': self.train_loader, 'val': self.val_loader, 'test': self.test_loader}[eval_set]
         batch_counter = 0
         with tqdm(loader, unit="batch") as tepoch:
-            for input_ids, input_masks, subj_tags, obj_tags, ys in tepoch:
+            for input_ids, input_masks, verb_tags, candidate_masks, candidate_tags, ys in tepoch:
                 tepoch.set_description(f"Epoch {epoch_i}")
                 batch_counter += 1
                 input_ids.to(device)
                 input_masks.to(device)
-                subj_tags.to(device)
-                obj_tags.to(device)
+                verb_tags.to(device)
+                candidate_masks.to(device)
+                [tags.to(device) for tags in candidate_tags]
                 ys.to(device)
-                loss, accuracy, input_ids, predictions = self.predict_batch(input_ids, input_masks, subj_tags, obj_tags, ys)
+                loss, accuracy, input_ids, predictions = self.predict_batch(input_ids, input_masks, verb_tags, candidate_masks, candidate_tags, ys)
                 tepoch.set_postfix(loss=loss, accuracy=accuracy.item())
                 epoch_loss += loss
                 epoch_input_ids += input_ids

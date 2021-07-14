@@ -1,5 +1,7 @@
 import torch
 from transformers import AutoModel
+from opt_einsum import contract
+
 
 class CandidateAttention(torch.nn.Module):
     """Computes dot product attention *weights* for a single query and a number of keys."""
@@ -26,8 +28,11 @@ class CandidateAttention(torch.nn.Module):
 
 class SpanAttention(torch.nn.Module):
     """Computes a span representation using a sort of attention (but it's just a projection..)."""
-    def __init__(self, dim: int, hidden: int):
+    def __init__(self, dim: int, hidden: int, num_heads: int):
         super(SpanAttention, self).__init__()
+        self.hidden = hidden
+        self.attn_dim = hidden // num_heads
+        self.num_heads = num_heads
         self.weight_proj = torch.nn.Linear(dim, 1, bias=False)
         self.value = torch.nn.Linear(dim, hidden, bias=False)
         self.softmax = torch.nn.Softmax(dim=1)
@@ -46,17 +51,18 @@ class SpanAttention(torch.nn.Module):
         return weighted_value
 
 
-
 class VerbArgumentAttention(torch.nn.Module):
     """Computes a distribution over candidates of some verb in a sentence (argument selection)."""
-    def __init__(self, dim: int, span_h: int, selection_h: int, model_name: str, freeze: bool = True):
+    def __init__(self, dim: int, span_h: int, num_heads: int, selection_h: int, model_name: str, freeze: bool = True):
         super(VerbArgumentAttention, self).__init__()
         self.bert_model = AutoModel.from_pretrained(model_name)
         self.freeze = freeze
         if self.freeze:
             for p in self.bert_model.parameters():
                 p.requires_grad = False
-        self.span_embedder = SpanAttention(dim=dim, hidden=span_h)
+        assert span_h % num_heads == 0
+        self.verb_embedder = SpanAttention(dim=dim, hidden=span_h, num_heads=num_heads)
+        self.span_embedder = SpanAttention(dim=dim, hidden=span_h, num_heads=num_heads)
         self.candidate_attn = CandidateAttention(span_h, selection_h)
 
     def forward(self, input_ids, input_masks, verb_tags, candidate_masks, candidate_tags):
@@ -65,14 +71,14 @@ class VerbArgumentAttention(torch.nn.Module):
             :param input_masks: [batch_size, max_seq_len]
             :param verb_tags: [batch_size, max_seq_len]
             :param candidate_masks: [batch_size, num_candidates]
-            :param candidate_tags: [batch_size, num_candidates, max_seq_len]
+            :param candidate_tags: [num_candidates, [batch_size, max_seq_len] ]
             :return: a classification embedding: [batch_size, num_candidates]
         """
-        embeddings = self.bert_model(input_ids, attention_mask=input_masks)[0]      # B x S
-        verb_embedding = self.span_embedder(embeddings, verb_tags)                  # B x D
-        candidate_embeddings = torch.stack([self.span_embedder(embeddings, tags) for tags in candidate_tags.transpose(0, 1)], dim=1) # B x C x D
+        embeddings = self.bert_model(input_ids, attention_mask=input_masks)[0]      # B x S x D
+        verb_embedding = self.verb_embedder(embeddings, verb_tags)                  # B x D
+        candidate_embeddings = torch.stack([self.span_embedder(embeddings, tags) for tags in candidate_tags], dim=1)    # B x C x D
         candidate_scores = self.candidate_attn(verb_embedding, candidate_embeddings, candidate_masks)
-        return candidate_scores
+        return torch.log(candidate_scores)
 
     """   
               0.verb_tensor [batch_size, dim]                   # representation of vp for each sentence in batch
@@ -95,11 +101,11 @@ def test_data():
                 :return: a classification embedding: [batch_size, num_candidates]
     """
     batch_size, max_seq_len, num_candidates = 10, 20, 5
-    dim, span_h, selection_h = 768, 200, 100
+    dim, span_h, num_heads, selection_h = 768, 200, 4, 100
     input_ids = torch.randint(low=3, high=2400, size=(batch_size, max_seq_len))
     input_masks = torch.randint(low=0, high=2, size=(batch_size, max_seq_len))
     verb_tags = torch.randint(low=0, high=2, size=(batch_size, max_seq_len))
     candidate_masks = torch.randint(low=0, high=2, size=(batch_size, num_candidates))
     candidate_tags = torch.randint(low=0, high=2, size=(batch_size, num_candidates, max_seq_len))
-    model = VerbArgumentAttention(dim=dim, span_h=span_h, selection_h=selection_h, model_name="GroNLP/bert-base-dutch-cased")
+    model = VerbArgumentAttention(dim=dim, span_h=span_h, num_heads=num_heads, selection_h=selection_h, model_name="GroNLP/bert-base-dutch-cased")
     result = model(input_ids, input_masks, verb_tags, candidate_masks, candidate_tags)
