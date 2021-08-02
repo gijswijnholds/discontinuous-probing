@@ -1,8 +1,14 @@
 import torch
 
-VERB_IDX = 3
+VERB_IDX = 100
 
-train_configs = [{'name': 'diffsep_anw1', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.NLLLoss,
+train_configs = [{'name': 'diffsep_anw4', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.CrossEntropyLoss,
+                  'freeze': True, 'bert_model': 'GroNLP/bert-base-dutch-cased', 'epochs': 7, 'batch_size': 10, 'run': 1},
+                 {'name': 'diffsep_anw5', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.CrossEntropyLoss,
+                  'freeze': True, 'bert_model': 'GroNLP/bert-base-dutch-cased', 'epochs': 7, 'batch_size': 10, 'run': 1}]
+
+
+train_configs_____ = [{'name': 'diffsep_anw1', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.NLLLoss,
                   'freeze': True, 'bert_model': 'GroNLP/bert-base-dutch-cased', 'epochs': 7, 'batch_size': 10, 'run': 1},
                  {'name': 'diffsep_anw2', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.NLLLoss,
                   'freeze': True, 'bert_model': 'GroNLP/bert-base-dutch-cased', 'epochs': 7, 'batch_size': 10, 'run': 1},

@@ -22,13 +22,13 @@ def sequence_collator(word_pad: int) -> Callable[[Samples], Tuple[LongTensor, Lo
         candidate_masks = torch.zeros(len(input_ids), max_span)         # batch_size x num_candidates
         for i, spans in enumerate(spanss):
             candidate_masks[i, :len(spans)] = 1
+        max_seq_len = max(map(len, input_ids))
         return (_pad_sequence([tensor(i, dtype=long) for i in input_ids], batch_first=True, padding_value=word_pad),
                 _pad_sequence([tensor(m, dtype=long) for m in attention_masks], batch_first=True, padding_value=0),
                 _pad_sequence([tensor(vs, dtype=long) for vs in verb_spans], batch_first=True, padding_value=0),
                 candidate_masks,
-                [_pad_sequence([tensor(ss, dtype=long) for ss in spans], batch_first=True, padding_value=0) for spans in list(zip_longest(*spanss, fillvalue=[]))],
+                [_pad_sequence([tensor(ss, dtype=long) for ss in spans], batch_first=True, padding_value=0) for spans in list(zip_longest(*spanss, fillvalue=max_seq_len*[0]))],
                 stack([tensor(y, dtype=long) for y in ys], dim=0))
-
     return collate_fn
 
 
@@ -66,9 +66,14 @@ class Trainer():
                     verb_tags: LongTensor, candidate_masks: LongTensor, candidate_tags: List[LongTensor],
                     ys: LongTensor):
         self.model.train()
+
+
         predictions = self.model.forward(input_ids, input_masks, verb_tags, candidate_masks, candidate_tags)
         batch_loss = self.loss_fn(predictions, ys)
         accuracy = compute_accuracy(predictions, ys)
+
+        # import pdb
+        # pdb.set_trace()
 
         batch_loss.backward()
         self.optimizer.step()

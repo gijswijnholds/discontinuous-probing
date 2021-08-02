@@ -22,9 +22,9 @@ class CandidateAttention(torch.nn.Module):
         candidates_k = self.selection_k(candidates)     # B x C x H
         attn_weights = torch.bmm(verb_q.unsqueeze(1), candidates_k.transpose(1, 2)).squeeze() # B x C
         attn_weights[candidate_masks.eq(0)] = -1e10      # B x C
-        candidate_scores = self.softmax(attn_weights) # B x C
-        return candidate_scores
-
+        # candidate_scores = self.softmax(attn_weights) # B x C
+        # return candidate_scores
+        return attn_weights
 
 class SpanAttention(torch.nn.Module):
     """Computes a span representation using a sort of attention (but it's just a projection..)."""
@@ -78,7 +78,7 @@ class VerbArgumentAttention(torch.nn.Module):
         verb_embedding = self.verb_embedder(embeddings, verb_tags)                  # B x D
         candidate_embeddings = torch.stack([self.span_embedder(embeddings, tags) for tags in candidate_tags], dim=1)    # B x C x D
         candidate_scores = self.candidate_attn(verb_embedding, candidate_embeddings, candidate_masks)
-        return torch.log(candidate_scores)
+        return candidate_scores
 
     """   
               0.verb_tensor [batch_size, dim]                   # representation of vp for each sentence in batch
