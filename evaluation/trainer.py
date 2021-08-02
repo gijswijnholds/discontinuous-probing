@@ -5,8 +5,9 @@ from torch.nn.utils.rnn import pad_sequence as _pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from torch import LongTensor, Tensor, tensor, long, no_grad, stack, load, cat
 from typing import List, Tuple, Callable, Any
+from itertools import zip_longest
 
-Sample = Tuple[List[str], List[int], List[int], int]
+Sample = Tuple[List[int], List[int], List[int], List[List[int]], int]
 Samples = List[Sample]
 
 # [1, 1, 0, 0, 2, 0, 0, 3, 3, V, V] ->
@@ -16,7 +17,11 @@ Samples = List[Sample]
 
 def sequence_collator(word_pad: int) -> Callable[[Samples], Tuple[LongTensor, LongTensor]]:
     def collate_fn(samples: Samples) -> tuple[Any, Any, Any, Any, Tensor]:
-        input_ids, attention_masks, subj_spans, obj_spans, ys = list(zip(*samples))
+        input_ids, attention_masks, verb_spans, spanss, ys = list(zip(*samples))
+        max_span = max(map(len, spanss))
+        candidate_masks = torch.zeros(len(input_ids), max_span)         # batch_size x num_candidates
+        for i, spans in enumerate(spanss):
+            candidate_masks[i, :len(spans)] = 1
         return (_pad_sequence([tensor(i, dtype=long) for i in input_ids], batch_first=True, padding_value=word_pad),
                 _pad_sequence([tensor(m, dtype=long) for m in attention_masks], batch_first=True, padding_value=0),
                 _pad_sequence([tensor(vs, dtype=long) for vs in verb_spans], batch_first=True, padding_value=0),

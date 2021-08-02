@@ -1,4 +1,5 @@
 import torch
+from math import sqrt
 from transformers import AutoModel
 from opt_einsum import contract
 
@@ -34,7 +35,9 @@ class SpanAttention(torch.nn.Module):
         self.attn_dim = hidden // num_heads
         self.num_heads = num_heads
         self.weight_proj = torch.nn.Linear(dim, 1, bias=False)
-        self.value = torch.nn.Linear(dim, hidden, bias=False)
+        self.q_transformation = torch.nn.Linear(dim, hidden, bias=False)
+        self.k_transformation = torch.nn.Linear(dim, hidden, bias=False)
+        self.v_transformation = torch.nn.Linear(dim, hidden, bias=False)
         self.softmax = torch.nn.Softmax(dim=1)
 
     def forward(self, span_embeddings, span_tags):
@@ -43,11 +46,21 @@ class SpanAttention(torch.nn.Module):
             :param span_tags: [batch_size, max_seq_len]
             :return: a weighted sum of a projection of the input span embeddings
         """
+        b, s, _ = span_embeddings.shape
         attn_weights = self.weight_proj(span_embeddings) # B x S x 1
         attn_weights[span_tags.eq(0)] = -1e10            # B x S x 1
         attn_weights = self.softmax(attn_weights)        # B x S x 1
-        span_value = self.value(span_embeddings)         # B x S x H
-        weighted_value = torch.bmm(attn_weights.transpose(1, 2), span_value).squeeze()  # B x H
+        qs = self.q_transformation(span_embeddings).view(-1, s, self.attn_dim, self.num_heads)
+        ks = self.k_transformation(span_embeddings).view(-1, s, self.attn_dim, self.num_heads)
+        vs = self.v_transformation(span_embeddings).view(-1, s, self.attn_dim, self.num_heads)
+
+        # relevance_weights = torch.bmm(qs, ks.transpose(1, 2)) / sqrt(self.hidden)
+        relevance_weights = contract('bqdh,bkdh->bqkh', qs, ks) / sqrt(self.attn_dim) # B x S x S x H
+        relevance_weights[span_tags.eq(0)] = -1e10
+        relevance_weights = relevance_weights.softmax(dim=-1)
+        # span_value = torch.bmm(relevance_weights, vs) # B x S x H
+        span_value = contract('bqkh,bkdh->bqdh', relevance_weights, vs).flatten(-2, -1) # B x S x H
+        weighted_value = (attn_weights * span_value).sum(dim=1).squeeze(1) # B x H
         return weighted_value
 
 
