@@ -1,7 +1,8 @@
 import torch
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 from evaluation.tokenizer import get_seq, untokenize, tokenize_string_with_spans
-from evaluation.preprocessor import preprocess_dataset, SpanDataset, separate_spans
+from evaluation.attention_preprocessor import preprocess_dataset, SpanDataset, separate_spans
+
 
 def predict_sentence(sentence, tags, tokenizer, model):
     test_sentence = "de man vraagt de vrouw te vertrekken"

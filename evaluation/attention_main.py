@@ -45,6 +45,7 @@ def setup_trainer_vice_versa(config):
                       optim_constructor=optim_constructor, lr=lr, loss_fn=loss_fn())
     return trainer
 
+
 def train_model(config):
     trainer = setup_trainer(config)
     print(config['name'])
@@ -55,7 +56,6 @@ def train_model_vice_versa(config):
     trainer = setup_trainer_vice_versa(config)
     print(config['name'])
     return trainer.main_loop(num_epochs=config['epochs'], device='cpu')
-
 
 
 if __name__ == '__main__':
