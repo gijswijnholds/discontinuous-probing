@@ -10,15 +10,24 @@ def create_tokenizer(tokenizer_name=bertje_name):
     return AutoTokenizer.from_pretrained(tokenizer_name)
 
 
-def tokenize_string_with_spans(tokenizer, words: List[str], tags: List[int]):
-    word_toks = map(lambda w: tokenizer.tokenize(w), words)
-    word_toks_tags = map(lambda wts_tg: (wts_tg[0], [wts_tg[1]]*len(wts_tg[0])), zip(word_toks, tags))
-    word_toks, tags = map(lambda i: sum(i, []), zip(*word_toks_tags))
-    toks = tokenizer.convert_tokens_to_ids(word_toks)
-    input_ids, input_tags = [1] + toks + [2], [0] + tags + [0]
-    attention_mask = [1] * len(input_ids)
-    return input_ids, input_tags, attention_mask
+def get_expanded_tags(word_tokens: List[List[str]], tags: List[int]):
+    """Given a list of lists of tokenized words and a list of tags corresponding to each word, we expand the tags
+    according to the length of each word tokenization."""
+    return sum(map(lambda wts_tg: len(wts_tg[0])*[wts_tg[1]], zip(word_tokens, tags)), [])
 
+def tokenize_string_with_spans(tokenizer, words: List[str], noun_spans: List[List[int]], verb_span: List[int]):
+    # todo
+    # Noun spans and verb span should have contain 0's and 1's instead of 0's and their idx.
+    word_tokens = map(lambda w: tokenizer.tokenize(w), words)
+    expanded_noun_spans = map(lambda span: get_expanded_tags(word_tokens, span), noun_spans)
+    expanded_verb_span = get_expanded_tags(word_tokens, verb_span)
+    word_tokens = sum(word_tokens, [])
+    tokens = tokenizer.convert_tokens_to_ids(word_tokens)
+    expanded_noun_spans = map(lambda span: [0] + span + [0])
+    expanded_verb_span = [0] + expanded_verb_span + [0]
+    input_ids = [1] + tokens + [2]
+    attention_mask = [1] * len(input_ids)
+    return input_ids, attention_mask, expanded_verb_span, expanded_noun_spans
 
 def separate_spans(multispan: List[int], verb_idx: int) -> Tuple[List[int], List[List[int]]]:
     """Given a list of integers indicating multiple candidates, a verb, and rest of the sentence,
@@ -34,15 +43,9 @@ def separate_spans(multispan: List[int], verb_idx: int) -> Tuple[List[int], List
     return verb_span, spans
 
 
-def tokenize_and_separate_sents(tokenizer, d):
-    input_ids, input_tags, attention_mask = tokenize_string_with_spans(tokenizer, d['sentence'].split(), d['tags'])
-    verb_span, spans = separate_spans(input_tags, VERB_IDX)
-    return input_ids, attention_mask, verb_span, spans
-
-
 def get_tokenized_sents_labels(tokenizer, data):
     """Tokenize inputs and separate their spans."""
-    inputss = [tokenize_and_separate_sents(tokenizer, d) for d in data]
+    inputss = map(lambda d: tokenize_string_with_spans(tokenizer, d['sentence'].split(), d['noun_spans'], d['verb_span']), data)
     input_idss, input_maskss, verb_spanss, spansss = zip(*inputss)
     labels = [d['label'] for d in data]
     return {'input_ids': list(input_idss),
@@ -53,6 +56,8 @@ def get_tokenized_sents_labels(tokenizer, data):
 
 
 def prepare_dataset(name=None):
+    # todo
+    # Update to load from grammars files rather than a class.
     print("Preparing dataset...")
     dataset = WinoVerbNLSynth(name=name).data
     print("Getting tokenizer...")

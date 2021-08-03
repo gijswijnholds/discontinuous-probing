@@ -7,6 +7,7 @@ Realized = list[tuple[list[int], list[int], str]]
 example_fn = './data/grammars/example_control.p'
 CompactSamples = tuple[List[str], List[List[int]], List[List[int]], int]
 
+
 def open_grammar(fn: Path):
     with open(fn, 'rb') as inf:
         data = pickle.load(inf)
@@ -45,6 +46,31 @@ def realization_to_sequences(realization: Realized, matching: dict[int, int], sp
     return correct_indices(compact_samples, special_idx)
 
 
+def sample_to_datas(sample: CompactSamples) -> list[dict]:
+    sentence, noun_spans, verb_items = sample
+    return [{'sentence': sentence,
+             'noun_spans': noun_spans,
+             'verb_span': verb_span,
+             'label': label}
+            for (verb_span, label) in verb_items]
+
+
+def real_match_to_datas(real: Realized, match: dict[int, int], verb_idx: int):
+    return sum(map(lambda r: sample_to_datas(realization_to_sequences(r, match, special_idx=verb_idx)), real), [])
+
+
+def grammar_to_dataset_format(grammar_fn: Path) -> List:
+    trees, realized, matchings = open_grammar(grammar_fn)
+    verb_idx = 99
+    return sum(map(lambda real_match: real_match_to_datas(*real_match, verb_idx), zip(realized, matchings)), [])
+
+
+def grammars_to_datasets(train_grammar_fn: Path, val_grammar_fn: Path, test_grammar_fn: Path):
+    train_data = grammar_to_dataset_format(train_grammar_fn)
+    val_data = grammar_to_dataset_format(val_grammar_fn)
+    test_data = grammar_to_dataset_format(test_grammar_fn)
+    return {'train': train_data, 'val': val_data, 'test': test_data}
+
 
 def main():
-    trees, reals, matchings = open_grammar(example_fn)
+    my_dataset = grammars_to_datasets(example_fn, example_fn, example_fn)
