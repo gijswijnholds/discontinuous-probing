@@ -74,6 +74,3 @@ class SpanDataset(Dataset):
     def __getitem__(self, i):
         return (self.data['input_ids'][i], self.data['attention_mask'][i],
                 self.data['verb_span'][i], self.data['spans'][i], self.data['label'][i])
-
-def preprocess_dataset():
-    NotImplemented
