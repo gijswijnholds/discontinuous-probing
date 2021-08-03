@@ -16,11 +16,11 @@ def get_expanded_tags(word_tokens: List[List[str]], tags: List[int]):
     return sum(map(lambda wts_tg: len(wts_tg[0])*[wts_tg[1]], zip(word_tokens, tags)), [])
 
 def tokenize_string_with_spans(tokenizer, words: List[str], noun_spans: List[List[int]], verb_span: List[int]):
-    # todo
-    # Noun spans and verb span should have contain 0's and 1's instead of 0's and their idx.
     word_tokens = map(lambda w: tokenizer.tokenize(w), words)
     expanded_noun_spans = map(lambda span: get_expanded_tags(word_tokens, span), noun_spans)
+    expanded_noun_spans = map(lambda span: map(lambda i: 1 if i > 0 else 0, span), noun_spans)
     expanded_verb_span = get_expanded_tags(word_tokens, verb_span)
+    expanded_verb_span = map(lambda i: 1 if i > 0 else 0, expanded_verb_span)
     word_tokens = sum(word_tokens, [])
     tokens = tokenizer.convert_tokens_to_ids(word_tokens)
     expanded_noun_spans = map(lambda span: [0] + span + [0])
