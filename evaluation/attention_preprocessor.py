@@ -35,7 +35,7 @@ def get_tokenized_sents_labels(tokenizer, data):
     """Tokenize inputs and separate their spans."""
     inputss = map(lambda d: tokenize_string_with_spans(tokenizer, d['sentence'].split(), d['noun_spans'], d['verb_span']), data)
     input_idss, input_maskss, verb_spanss, spansss = zip(*inputss)
-    labels = [d['label'] for d in data]
+    labels = [d['label'] - 1 for d in data]
     return {'input_ids': list(input_idss),
             'attention_mask': list(input_maskss),
             'verb_span': list(verb_spanss),
