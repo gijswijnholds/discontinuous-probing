@@ -1,10 +1,11 @@
 from typing import List, Tuple
+import random
 from config import VERB_IDX
 from evaluation.task import WinoVerbNLSynth
 from transformers import AutoTokenizer
 from evaluation.model_names import bertje_name
 from torch.utils.data import Dataset
-
+from evaluation.attention_grammarreader import grammar_to_dataset_format
 
 def create_tokenizer(tokenizer_name=bertje_name):
     return AutoTokenizer.from_pretrained(tokenizer_name)
@@ -16,31 +17,18 @@ def get_expanded_tags(word_tokens: List[List[str]], tags: List[int]):
     return sum(map(lambda wts_tg: len(wts_tg[0])*[wts_tg[1]], zip(word_tokens, tags)), [])
 
 def tokenize_string_with_spans(tokenizer, words: List[str], noun_spans: List[List[int]], verb_span: List[int]):
-    word_tokens = map(lambda w: tokenizer.tokenize(w), words)
-    expanded_noun_spans = map(lambda span: get_expanded_tags(word_tokens, span), noun_spans)
-    expanded_noun_spans = map(lambda span: map(lambda i: 1 if i > 0 else 0, span), noun_spans)
+    word_tokens = list(map(lambda w: tokenizer.tokenize(w), words))
+    expanded_noun_spans = list(map(lambda span: get_expanded_tags(word_tokens, list(span)), noun_spans))
+    expanded_noun_spans = list(map(lambda span: list(map(lambda i: 1 if i > 0 else 0, span)), expanded_noun_spans))
     expanded_verb_span = get_expanded_tags(word_tokens, verb_span)
-    expanded_verb_span = map(lambda i: 1 if i > 0 else 0, expanded_verb_span)
+    expanded_verb_span = list(map(lambda i: 1 if i > 0 else 0, expanded_verb_span))
     word_tokens = sum(word_tokens, [])
     tokens = tokenizer.convert_tokens_to_ids(word_tokens)
-    expanded_noun_spans = map(lambda span: [0] + span + [0])
+    expanded_noun_spans = list(map(lambda span: [0] + list(span) + [0], expanded_noun_spans))
     expanded_verb_span = [0] + expanded_verb_span + [0]
     input_ids = [1] + tokens + [2]
     attention_mask = [1] * len(input_ids)
     return input_ids, attention_mask, expanded_verb_span, expanded_noun_spans
-
-def separate_spans(multispan: List[int], verb_idx: int) -> Tuple[List[int], List[List[int]]]:
-    """Given a list of integers indicating multiple candidates, a verb, and rest of the sentence,
-        split these into multiple spans (one for the verb phrase, and one for each of the candidates).
-        Example: [0, 0, 1, 1, 0, 2, 3, 3, 100, 100] should return
-                 ([0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
-                  [[0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
-                  [0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
-                  [0, 0, 0, 0, 0, 0, 1, 1, 0, 0]]"""
-    span_idxs = list(set([i for i in multispan if i > 0 and not i == verb_idx]))
-    verb_span = [1 if x == verb_idx else 0 for x in multispan]
-    spans = [[1 if x == span_idx else 0 for x in multispan] for span_idx in span_idxs]
-    return verb_span, spans
 
 
 def get_tokenized_sents_labels(tokenizer, data):
@@ -55,17 +43,20 @@ def get_tokenized_sents_labels(tokenizer, data):
             'label': list(labels)}
 
 
-def prepare_dataset(name=None):
-    # todo
-    # Update to load from grammars files rather than a class.
+def prepare_dataset(grammar_fn: str):
     print("Preparing dataset...")
-    dataset = WinoVerbNLSynth(name=name).data
+    dataset = grammar_to_dataset_format(grammar_fn)
+    num_train, num_val, num_test = (50000, 5000, 5000)
+    random.shuffle(dataset, random.seed(238597))
+    train_data = dataset[:num_train]
+    val_data = dataset[num_train:num_train+num_val]
+    test_data = dataset[num_train+num_val:num_train+num_val+num_test]
     print("Getting tokenizer...")
     tokenizer = create_tokenizer()
     print("Tokenizing data...")
-    tokenized_train = get_tokenized_sents_labels(tokenizer, dataset['train'])
-    tokenized_val = get_tokenized_sents_labels(tokenizer, dataset['val'])
-    tokenized_test = get_tokenized_sents_labels(tokenizer, dataset['test'])
+    tokenized_train = get_tokenized_sents_labels(tokenizer, train_data)
+    tokenized_val = get_tokenized_sents_labels(tokenizer, val_data)
+    tokenized_test = get_tokenized_sents_labels(tokenizer, test_data)
     return (tokenized_train, tokenized_val, tokenized_test)
 
 

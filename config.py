@@ -1,6 +1,6 @@
 import torch
 
-VERB_IDX = 100
+VERB_IDX = 99
 
 train_configs = [{'name': 'diffsep_anw4', 'optim': torch.optim.AdamW, 'lr': 0.00003, 'loss_fn': torch.nn.CrossEntropyLoss,
                   'freeze': True, 'bert_model': 'GroNLP/bert-base-dutch-cased', 'epochs': 7, 'batch_size': 10, 'run': 1},

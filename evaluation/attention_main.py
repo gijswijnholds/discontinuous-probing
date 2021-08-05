@@ -4,7 +4,7 @@ import torch
 from evaluation.attention_model import VerbArgumentAttention
 from evaluation.attention_preprocessor import prepare_dataset, SpanDataset
 from evaluation.attention_trainer import Trainer
-from evaluation.analyse import analyse_test
+from evaluation.attention_grammarreader import example_fn
 from config import train_configs
 
 
@@ -14,7 +14,7 @@ def setup_trainer(config):
 
     my_model = VerbArgumentAttention(dim=768, span_h=200, num_heads=4, selection_h=100,
                                      model_name=bert_model, freeze=freeze)
-    dataset = prepare_dataset(name=name)
+    dataset = prepare_dataset(grammar_fn=example_fn)
     train_dataset, val_dataset, test_dataset = SpanDataset(dataset[0]), SpanDataset(dataset[1]), SpanDataset(
         dataset[2])
 
@@ -33,7 +33,7 @@ def setup_trainer_vice_versa(config):
 
     my_model = VerbArgumentAttention(dim=768, span_h=200, num_heads=4, selection_h=100,
                                      model_name=bert_model, freeze=freeze)
-    dataset = prepare_dataset(name=name)
+    dataset = prepare_dataset(grammar_fn=example_fn)
     train_dataset, val_dataset, test_dataset = SpanDataset(dataset[0]), SpanDataset(dataset[1]), SpanDataset(
         dataset[2])
 
