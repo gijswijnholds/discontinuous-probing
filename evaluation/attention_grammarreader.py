@@ -13,10 +13,14 @@ test_example_fn = './data/grammars/example_control_test.txt'
 CompactSamples = tuple[List[str], List[List[int]], List[List[int]], int]
 
 
+def fix_matching(matching: dict[str, int]) -> dict[int, int]:
+    return {int(k):matching[k] for k in matching}
+
+
 def open_grammar(fn: Path):
     with open(fn, 'r') as inf:
         data = [json.loads(ln) for ln in inf.readlines()]
-    realizations, matchings = zip(*[(d['surfaces'], d['matching']) for d in data])
+    realizations, matchings = zip(*[(d['surfaces'], fix_matching(d['matching'])) for d in data])
     return realizations, matchings
 
 
@@ -69,14 +73,3 @@ def grammar_to_dataset_format(grammar_fn: Path) -> List:
     realized, matchings = open_grammar(grammar_fn)
     verb_idx = 99
     return sum(map(lambda real_match: real_match_to_datas(*real_match, verb_idx), zip(realized, matchings)), [])
-
-
-def grammars_to_datasets(train_grammar_fn: Path, val_grammar_fn: Path, test_grammar_fn: Path):
-    train_data = grammar_to_dataset_format(train_grammar_fn)
-    val_data = grammar_to_dataset_format(val_grammar_fn)
-    test_data = grammar_to_dataset_format(test_grammar_fn)
-    return {'train': train_data, 'val': val_data, 'test': test_data}
-
-
-def main():
-    my_dataset = grammars_to_datasets(example_fn, example_fn, example_fn)
