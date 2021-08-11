@@ -2,6 +2,8 @@ from typing import List, Tuple
 from typing import Optional as Maybe
 import pickle
 from pathlib import Path
+import json
+
 
 Realized = list[tuple[list[int], list[int], str]]
 example_fn = './data/grammars/example_control.p'
@@ -9,9 +11,10 @@ CompactSamples = tuple[List[str], List[List[int]], List[List[int]], int]
 
 
 def open_grammar(fn: Path):
-    with open(fn, 'rb') as inf:
-        data = pickle.load(inf)
-    return data['trees'], data['realizations'], data['matchings']
+    with open(fn, 'r') as inf:
+        data = [json.loads(ln) for ln in inf.readlines()]
+    realizations, matchings = zip(*[(d['surfaces'], d['matching']) for d in data])
+    return realizations, matchings
 
 
 def get_span(constant: str, idx: Maybe[int]) -> List[int]:
@@ -60,7 +63,7 @@ def real_match_to_datas(real: Realized, match: dict[int, int], verb_idx: int):
 
 
 def grammar_to_dataset_format(grammar_fn: Path) -> List:
-    trees, realized, matchings = open_grammar(grammar_fn)
+    realized, matchings = open_grammar(grammar_fn)
     verb_idx = 99
     return sum(map(lambda real_match: real_match_to_datas(*real_match, verb_idx), zip(realized, matchings)), [])
 
