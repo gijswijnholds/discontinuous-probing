@@ -43,14 +43,16 @@ def get_tokenized_sents_labels(tokenizer, data):
             'label': list(labels)}
 
 
-def prepare_dataset(grammar_fn: str):
+def prepare_dataset(train_grammar_fn: str, dev_grammar_fn: str, test_grammar_fn: str):
     print("Preparing dataset...")
-    dataset = grammar_to_dataset_format(grammar_fn)
-    num_train, num_val, num_test = (50000, 5000, 5000)
-    random.shuffle(dataset, random.seed(238597))
-    train_data = dataset[:num_train]
-    val_data = dataset[num_train:num_train+num_val]
-    test_data = dataset[num_train+num_val:num_train+num_val+num_test]
+    train_data = grammar_to_dataset_format(train_grammar_fn)
+    val_data = grammar_to_dataset_format(dev_grammar_fn)
+    test_data = grammar_to_dataset_format(test_grammar_fn)
+    # num_train, num_val, num_test = (50000, 5000, 5000)
+    # random.shuffle(dataset, random.seed(238597))
+    # train_data = dataset[:num_train]
+    # val_data = dataset[num_train:num_train+num_val]
+    # test_data = dataset[num_train+num_val:num_train+num_val+num_test]
     print("Getting tokenizer...")
     tokenizer = create_tokenizer()
     print("Tokenizing data...")
