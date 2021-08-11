@@ -43,11 +43,11 @@ def get_tokenized_sents_labels(tokenizer, data):
             'label': list(labels)}
 
 
-def prepare_dataset(train_grammar_fn: str, dev_grammar_fn: str, test_grammar_fn: str):
+def prepare_dataset(name: str, train_grammar_fn: str, dev_grammar_fn: str, test_grammar_fn: str):
     print("Preparing dataset...")
-    train_data = grammar_to_dataset_format(train_grammar_fn)
-    val_data = grammar_to_dataset_format(dev_grammar_fn)
-    test_data = grammar_to_dataset_format(test_grammar_fn)
+    train_data = grammar_to_dataset_format(train_grammar_fn[:-4] + name + '.txt')
+    val_data = grammar_to_dataset_format(dev_grammar_fn[:-4] + name + '.txt')
+    test_data = grammar_to_dataset_format(test_grammar_fn[:-4] + name + '.txt')
     print("Getting tokenizer...")
     tokenizer = create_tokenizer()
     print("Tokenizing data...")

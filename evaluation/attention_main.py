@@ -14,7 +14,7 @@ def setup_trainer(config):
 
     my_model = VerbArgumentAttention(dim=768, span_h=200, num_heads=4, selection_h=100,
                                      model_name=bert_model, freeze=freeze)
-    dataset = prepare_dataset(train_grammar_fn=train_example_fn, dev_grammar_fn=dev_example_fn, test_grammar_fn=test_example_fn)
+    dataset = prepare_dataset(name=name, train_grammar_fn=train_example_fn, dev_grammar_fn=dev_example_fn, test_grammar_fn=test_example_fn)
     train_dataset, val_dataset, test_dataset = SpanDataset(dataset[0]), SpanDataset(dataset[1]), SpanDataset(
         dataset[2])
 
