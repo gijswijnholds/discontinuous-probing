@@ -5,7 +5,7 @@ from evaluation.attention_model import VerbArgumentAttention
 from evaluation.attention_preprocessor import prepare_dataset, SpanDataset
 from evaluation.attention_trainer import Trainer
 from evaluation.attention_grammarreader import train_example_fn, dev_example_fn, test_example_fn
-from config import train_configs_cluster
+from config import train_configs_cluster, train_configs_control
 
 
 def setup_trainer(config):
@@ -60,4 +60,4 @@ def train_model_vice_versa(config):
 
 if __name__ == '__main__':
     results_vice_versa = {config['name']: train_model_vice_versa(config) for config in train_configs}
-    results = {config['name']: train_model(config) for config in train_configs_cluster}
+    results = {config['name']: train_model(config) for config in train_configs_control}
