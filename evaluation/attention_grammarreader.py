@@ -7,9 +7,12 @@ import json
 
 Realized = list[tuple[list[int], list[int], str]]
 example_fn = './data/grammars/example_control.p'
-train_example_fn = './data/grammars/example_control_train.txt'
-dev_example_fn = './data/grammars/example_control_dev.txt'
-test_example_fn = './data/grammars/example_control_test.txt'
+train_example_fn = './data/grammars/example_cluster_train.txt'
+dev_example_fn = './data/grammars/example_cluster_dev.txt'
+test_example_fn = './data/grammars/example_cluster_test.txt'
+# train_example_fn = './data/grammars/example_control_train.txt'
+# dev_example_fn = './data/grammars/example_control_dev.txt'
+# test_example_fn = './data/grammars/example_control_test.txt'
 CompactSamples = tuple[List[str], List[List[int]], List[List[int]], int]
 
 
