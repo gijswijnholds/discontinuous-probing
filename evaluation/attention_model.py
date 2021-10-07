@@ -12,18 +12,21 @@ class CandidateAttention(torch.nn.Module):
         self.selection_k = torch.nn.Linear(dim, hidden, bias=False)
         self.softmax = torch.nn.Softmax(dim=1)
 
-    def forward(self, verb, candidates, candidate_masks):
+    def forward(self, verbs, verb_masks, candidates, candidate_masks):
         """
-            :param verb: [batch_size, dim]
-            :param candidates: [batch_size, num_candidates, dim]
-            :param candidate_masks [batch_size, num_candidates]
+            :param verbs: [batch_size, num_verbs, dim]
+            :param verb_masks: [batch_size, num_verbs]
+            :param candidates: [batch_size, num_nouns, dim]
+            :param candidate_masks [batch_size, num_nouns]
             :returns: the masked (softmaxed) attention weights that show what is the most likely candidate for the verb.
         """
-        verb_q = self.selection_q(verb)                 # B x 1 x H
-        candidates_k = self.selection_k(candidates)     # B x C x H
-        attn_weights = torch.bmm(verb_q.unsqueeze(1), candidates_k.transpose(1, 2)).squeeze() # B x C
-        attn_weights[candidate_masks.eq(0)] = -1e10      # B x C
-        # candidate_scores = self.softmax(attn_weights) # B x C
+        verb_q = self.selection_q(verbs)                 # B x V x H
+        candidates_k = self.selection_k(candidates)     # B x N x H
+        attn_weights = torch.bmm(verb_q, candidates_k.transpose(1, 2)) # B x V x N
+        masks = torch.bmm(verb_masks.unsqueeze(2), candidate_masks.unsqueeze(1)) # B x V x N
+        attn_weights[masks.eq(0)] = -1e-10 # B x V x N
+        # attn_weights[candidate_masks.eq(0)] = -1e10      # B x N
+        # candidate_scores = self.softmax(attn_weights) # B x N
         # return candidate_scores
         return attn_weights
 
@@ -78,19 +81,20 @@ class VerbArgumentAttention(torch.nn.Module):
         self.span_embedder = SpanAttention(dim=dim, hidden=span_h, num_heads=num_heads)
         self.candidate_attn = CandidateAttention(span_h, selection_h)
 
-    def forward(self, input_ids, input_masks, verb_tags, candidate_masks, candidate_tags):
+    def forward(self, input_ids, input_masks, verb_masks, verb_tags, candidate_masks, candidate_tags):
         """
             :param input_ids: [batch_size, max_seq_len]
             :param input_masks: [batch_size, max_seq_len]
-            :param verb_tags: [batch_size, max_seq_len]
-            :param candidate_masks: [batch_size, num_candidates]
-            :param candidate_tags: [num_candidates, [batch_size, max_seq_len] ]
-            :return: a classification embedding: [batch_size, num_candidates]
+            :param verb_masks: [batch_size, num_verbs]
+            :param verb_tags: [num_verbs, [batch_size, max_seq_len]]
+            :param candidate_masks: [batch_size, num_nouns]
+            :param candidate_tags: [num_nouns, [batch_size, max_seq_len]]
+            :return: a classification embedding: [batch_size, num_nouns]
         """
         embeddings = self.bert_model(input_ids, attention_mask=input_masks)[0]      # B x S x D
-        verb_embedding = self.verb_embedder(embeddings, verb_tags)                  # B x D
-        candidate_embeddings = torch.stack([self.span_embedder(embeddings, tags) for tags in candidate_tags], dim=1)    # B x C x D
-        candidate_scores = self.candidate_attn(verb_embedding, candidate_embeddings, candidate_masks)
+        verb_embeddings = torch.stack([self.verb_embedder(embeddings, verb) for verb in verb_tags], dim=1) # B x VC x D
+        candidate_embeddings = torch.stack([self.span_embedder(embeddings, tags) for tags in candidate_tags], dim=1)    # B x (VC x NC x D)
+        candidate_scores = self.candidate_attn(verb_embeddings, verb_masks, candidate_embeddings, candidate_masks)
         return candidate_scores
 
     """   
@@ -108,17 +112,20 @@ def test_data():
     """
                 :param input_ids: [batch_size, max_seq_len]
                 :param input_masks: [batch_size, max_seq_len]
-                :param verb_tags: [batch_size, max_seq_len]
+                :param verb_masks: [batch_size, num_verbs]
+                :param verb_tags: [batch_size, num_verbs, max_seq_len]
                 :param candidate_masks: [batch_size, num_candidates]
                 :param candidate_tags: [batch_size, num_candidates, max_seq_len]
                 :return: a classification embedding: [batch_size, num_candidates]
     """
-    batch_size, max_seq_len, num_candidates = 10, 20, 5
+    batch_size, max_seq_len, num_verbs, num_candidates = 10, 20, 7, 5
     dim, span_h, num_heads, selection_h = 768, 200, 4, 100
     input_ids = torch.randint(low=3, high=2400, size=(batch_size, max_seq_len))
     input_masks = torch.randint(low=0, high=2, size=(batch_size, max_seq_len))
-    verb_tags = torch.randint(low=0, high=2, size=(batch_size, max_seq_len))
+    verb_masks = torch.randint(low=0, high=2, size=(batch_size, num_verbs))
+    verb_tags = torch.randint(low=0, high=2, size=(num_verbs, batch_size, max_seq_len))
     candidate_masks = torch.randint(low=0, high=2, size=(batch_size, num_candidates))
-    candidate_tags = torch.randint(low=0, high=2, size=(batch_size, num_candidates, max_seq_len))
+    candidate_tags = torch.randint(low=0, high=2, size=(num_candidates, batch_size, max_seq_len))
     model = VerbArgumentAttention(dim=dim, span_h=span_h, num_heads=num_heads, selection_h=selection_h, model_name="GroNLP/bert-base-dutch-cased")
-    result = model(input_ids, input_masks, verb_tags, candidate_masks, candidate_tags)
+    result = model(input_ids, input_masks, verb_masks, verb_tags, candidate_masks, candidate_tags)
+    return result
