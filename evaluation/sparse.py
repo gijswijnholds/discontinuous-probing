@@ -1,32 +1,14 @@
 import torch
 from torch import Tensor
-from random import randint
 from torch_geometric.nn import global_mean_pool as placeholder_aggregation
 from transformers import AutoModel
 from typing import Sequence, Callable
 
 
-# def test():
-#     from torch.nn.utils.rnn import pad_sequence
-#     batch_size = 32
-#     max_seq_len = 50
-#     max_nouns = 5
-#     max_verbs = 3
-#     dim = 128
-#     sent_lens = [randint(3, max_seq_len) for _ in range(batch_size)]
-#     mask = pad_sequence([torch.ones(sent_len, dtype=torch.long) for sent_len in sent_lens], batch_first=True)
-#     bert_outputs = torch.rand((batch_size, mask.shape[1], dim))
-#     n_spans: list[list[list[int]]] = [[[randint(0, 1) for s in range(sent_len)]
-#                                        for _ in range(randint(1, max_nouns))] for sent_len in sent_lens]
-#     v_spans: list[list[list[int]]] = [[[randint(0, 1) for s in range(sent_len)]
-#                                        for _ in range(randint(1, max_nouns))] for sent_len in sent_lens]
-#     find_matches(bert_outputs, mask, n_spans, v_spans)
-
-
 def find_matches(bert_outputs: Tensor,
                  mask: Tensor,
-                 n_spanss: list[list[list[int]]],
                  v_spanss: list[list[list[int]]],
+                 n_spanss: list[list[list[int]]],
                  x_atn_fn: Callable[[Tensor, Tensor, Tensor], Tensor]) \
         -> Tensor:
 
@@ -74,7 +56,6 @@ class SparseAtn(torch.nn.Module):
 
 
 class SparseVA(torch.nn.Module):
-    """Computes a distribution over candidates of some verb in a sentence (argument selection)."""
     def __init__(self, dim: int, span_h: int, num_heads: int, selection_h: int, model_name: str, freeze: bool = True):
         super(SparseVA, self).__init__()
         self.bert_model = AutoModel.from_pretrained(model_name)
@@ -87,4 +68,4 @@ class SparseVA(torch.nn.Module):
 
     def forward(self, input_ids, input_masks, v_spanss: list[list[list[int]]], n_spanss: list[list[list[int]]]):
         embeddings = self.bert_model(input_ids, attention_mask=input_masks)[0]                  # B x S x D
-        return find_matches(embeddings, input_masks, n_spanss, v_spanss, self.x_atn)            # (num_verbs, num_nouns)
+        return find_matches(embeddings, input_masks, v_spanss, n_spanss, self.x_atn)            # (num_verbs, num_nouns)

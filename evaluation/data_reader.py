@@ -1,6 +1,5 @@
 from typing import Optional as Maybe
 from typing import Union, NamedTuple
-from pathlib import Path
 import json
 
 Matching = dict[int, int]
@@ -18,19 +17,19 @@ AbsTree = Union[tuple[Maybe[int], Maybe[int], str], tuple['AbsTree', ...]]
 
 
 class CompactSample(NamedTuple):
-    depth: int
-    abstree: AbsTree
-    sentence: list[str]
-    n_spans: list[list[int]]
-    v_spans: list[list[int]]
-    labels: list[int]
+    depth:      int
+    abstree:    AbsTree
+    sentence:   list[str]
+    n_spans:    list[list[int]]
+    v_spans:    list[list[int]]
+    labels:     list[int]
 
 
 def fix_matching(matching: dict[str, int]) -> Matching:
     return {int(k): matching[k] for k in matching}
 
 
-def open_grammar(fn: Path) -> list[tuple[int, AbsTree, Matching, Realized]]:
+def open_grammar(fn: str) -> list[tuple[int, AbsTree, Matching, Realized]]:
     with open(fn, 'r') as inf:
         data = json.load(inf)
     return [(int(depth), abstree, fix_matching(data[depth][abstree][0]), eval(surface))
@@ -70,6 +69,6 @@ def make_sample(depth: int, abstree: AbsTree, matching: Matching, realization: R
     return correct_indices(depth, abstree, wss, noun_spans, verb_spans, labels)
 
 
-def grammar_to_dataset_format(grammar_fn: Path) -> list[CompactSample]:
+def read_grammar(grammar_fn: str) -> list[CompactSample]:
     samples = open_grammar(grammar_fn)
     return list(map(lambda s: make_sample(*s), samples))
