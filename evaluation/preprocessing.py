@@ -1,6 +1,6 @@
 from transformers import AutoTokenizer, TOKENIZER_MAPPING
 from .model_names import bertje_name
-from .attention_grammarreader import CompactSample, read_grammar
+from .data_reader import CompactSample, read_grammar
 from typing import NamedTuple
 from torch.utils.data import Dataset
 

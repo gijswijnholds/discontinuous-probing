@@ -4,7 +4,7 @@ from torch.nn.utils.rnn import pad_sequence as pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from torch import LongTensor, Tensor, no_grad
 from typing import Callable
-from .attention_preprocessor import ProcessedSample
+from .preprocessing import ProcessedSample
 from .sparse import sparse_matches
 
 
