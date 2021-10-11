@@ -11,6 +11,14 @@ class ProcessedSample(NamedTuple):
     noun_spans:     list[list[int]]
     compact:        CompactSample
 
+    def check(self):
+        assert len(self.verb_spans) == len(self.compact.labels)
+        assert max(self.compact.labels) <= len(self.noun_spans) - 1
+        assert set(map(len, self.verb_spans)) == set(map(len, self.noun_spans))
+        assert set(sum(self.verb_spans, []) + sum(self.noun_spans, [])) == {0, 1}
+        assert len(self.tokens) == len(self.verb_spans[0])
+        assert self.tokens[0] == 1 and self.tokens[-1] == 2
+
 
 def create_tokenizer(tokenizer_name=bertje_name) -> TOKENIZER_MAPPING:
     return AutoTokenizer.from_pretrained(tokenizer_name)
@@ -39,9 +47,9 @@ def tokenize_compacts(
     return [tokenize(sample) for sample in data]
 
 
-def prepare_dataset(name: str, fns: tuple[str, ...]) -> list[list[ProcessedSample], ...]:
+def prepare_dataset(fn: str) -> list[list[ProcessedSample], ...]:
     print("Preparing datasets...")
-    datasets = [read_grammar(fn[:-4] + name + '.txt') for fn in fns]
+    datasets = read_grammar(fn)
     print("Getting tokenizer...")
     tokenizer = create_tokenizer()
     print("Tokenizing data...")
@@ -51,9 +59,12 @@ def prepare_dataset(name: str, fns: tuple[str, ...]) -> list[list[ProcessedSampl
 class SpanDataset(Dataset):
     def __init__(self, data: list[ProcessedSample]):
         self.data = data
+        for sample in self.data:
+            sample.check()
 
     def __len__(self) -> int:
         return len(self.data)
 
     def __getitem__(self, i: int) -> ProcessedSample:
         return self.data[i]
+
