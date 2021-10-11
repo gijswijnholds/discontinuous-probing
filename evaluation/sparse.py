@@ -56,14 +56,13 @@ class SparseAtn(torch.nn.Module):
 
 
 class SparseVA(torch.nn.Module):
-    def __init__(self, dim: int, span_h: int, num_heads: int, selection_h: int, model_name: str, freeze: bool = True):
+    def __init__(self, dim: int, selection_h: int, model_name: str, freeze: bool = True):
         super(SparseVA, self).__init__()
         self.bert_model = AutoModel.from_pretrained(model_name)
         self.freeze = freeze
         if self.freeze:
             for p in self.bert_model.parameters():
                 p.requires_grad = False
-        assert span_h % num_heads == 0
         self.x_atn = SparseAtn(dim, selection_h)
 
     def forward(self, input_ids, input_masks, v_spanss: list[list[list[int]]], n_spanss: list[list[list[int]]]):
