@@ -47,7 +47,7 @@ def tokenize_compacts(
     return [tokenize(sample) for sample in data]
 
 
-def prepare_dataset(fn: str) -> list[list[ProcessedSample], ...]:
+def prepare_datasets(fn: str) -> list[list[ProcessedSample], ...]:
     print("Preparing datasets...")
     datasets = read_grammar(fn)
     print("Getting tokenizer...")
