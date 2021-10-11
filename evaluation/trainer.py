@@ -118,7 +118,7 @@ class Trainer:
             print(f"Epoch {e+1}...")
             train_loss, train_acc = self.train_epoch(device=device, epoch_i=e+1)
             print(f"Train loss {train_loss:.5f}, Train accuracy: {train_acc:.5f}")
-            if e % val_every == 0:
+            if (e % val_every == 0 and e != 0) or e == num_epochs:
                 val_loss, val_acc = self.eval_epoch(eval_set='val', device=device, epoch_i=e+1)
                 print(f"Val loss {val_loss:.5f}, Val accuracy: {val_acc:.5f}")
                 test_loss, test_acc = self.eval_epoch(eval_set='test', device=device, epoch_i=e+1)
