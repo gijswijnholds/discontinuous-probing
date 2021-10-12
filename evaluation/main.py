@@ -6,8 +6,8 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import AdamW
 
 
-def setup_trainer(grammar_file: str, bert_name: str, freeze: bool):
-    model = SparseVA(model_name=bert_name, freeze=freeze, dim=768, selection_h=128)
+def setup_trainer(grammar_file: str, bert_name: str, freeze: bool, device: str) -> Trainer:
+    model = SparseVA(bert_name=bert_name, freeze=freeze, dim=768, selection_h=128)
     train_ds, val_ds, test_ds = prepare_datasets(grammar_file)
     return Trainer(model=model,
                    train_dataset=train_ds,
@@ -17,4 +17,12 @@ def setup_trainer(grammar_file: str, bert_name: str, freeze: bool):
                    word_pad=3,
                    optim_constructor=AdamW,
                    lr=1e-05,
-                   loss_fn=CrossEntropyLoss())
+                   loss_fn=CrossEntropyLoss(),
+                   device=device)
+
+
+def run_trainer(grammar_file: str, bert_name: str, freeze: bool, device: str = 'cuda', num_repeats: int = 1):
+    results = dict()
+    for i in range(num_repeats):
+        results[i] = setup_trainer(grammar_file, bert_name, freeze).main_loop(15, device=device, val_every=5)
+    return results

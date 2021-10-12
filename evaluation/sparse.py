@@ -1,16 +1,19 @@
 import torch
 from torch import Tensor
-from torch_geometric.nn import global_mean_pool as placeholder_aggregation
 from transformers import AutoModel
 from typing import Sequence, Callable
+from torch_geometric.nn import GlobalAttention
+from itertools import groupby
 
 
 def find_matches(bert_outputs: Tensor,
                  mask: Tensor,
                  v_spanss: list[list[list[int]]],
                  n_spanss: list[list[list[int]]],
+                 verb_aggr_fn: Callable[[Tensor, Tensor], Tensor],
+                 noun_aggr_fn: Callable[[Tensor, Tensor], Tensor],
                  x_atn_fn: Callable[[Tensor, Tensor, Tensor], Tensor]) \
-        -> Tensor:
+        -> tuple[Tensor, Tensor]:
 
     offsets = mask.sum(dim=-1)                      # (batch,)                  -- how many words per sentence
     offsets = offsets.cumsum(dim=-1).roll(1, 0)     # (batch,)
@@ -18,27 +21,38 @@ def find_matches(bert_outputs: Tensor,
     sparse_batch = bert_outputs[mask != 0]          # (num_tokens, dim)         -- token reprs for the entire batch
     n_batch, n_id, n_source, num_n = sparse_spans(n_spanss, offsets)
     v_batch, v_id, v_source, num_v = sparse_spans(v_spanss, offsets)
-    n_reprs = placeholder_aggregation(
+    n_reprs = noun_aggr_fn(
         sparse_batch[n_source], n_id)               # (num_nouns, dim)          -- aggregated noun representations
-    v_reprs = placeholder_aggregation(
+    v_reprs = verb_aggr_fn(
         sparse_batch[v_source], v_id)               # (num_verbs, dim)          -- aggregated verb representations
     v_mask, n_mask = torch.cartesian_prod(v_batch, n_batch).chunk(2, dim=-1)
     vn_mask = v_mask.eq(n_mask).view(num_v, num_n)  # (num_verbs, num_nouns)    -- verb to noun alignment
-    return x_atn_fn(v_reprs, n_reprs, vn_mask)      # (num_verbs, num_nouns)    -- verb to noun attention
+    return x_atn_fn(v_reprs, n_reprs, vn_mask), vn_mask
 
 
-def sparse_spans(spanss: list[list[list[int]]], offsets: Sequence[int]) -> tuple[Tensor, Tensor, Tensor, int]:
+def sparse_spans(spanss: list[list[list[int]]], offsets: Tensor) -> tuple[Tensor, Tensor, Tensor, int]:
+    def ones(x: int) -> Tensor:
+        return torch.ones(x, dtype=torch.long, device=offsets.device)
     split = [(batch, span) for batch, spans in enumerate(spanss) for span in spans]
     batch_idx, token_idx, spans = list(zip(*[
-        (b, torch.ones(sum(span), dtype=torch.long) * idx, torch.tensor(span).nonzero().squeeze(-1) + offsets[b])
+        (b, ones(sum(span)) * idx, torch.tensor(span, device=offsets.device).nonzero().squeeze(-1) + offsets[b])
         for idx, (b, span) in enumerate(split)]))
-    return torch.tensor(batch_idx), torch.cat(token_idx), torch.cat(spans), len(split)
+    return torch.tensor(batch_idx, device=offsets.device), torch.cat(token_idx), torch.cat(spans), len(split)
 
 
 def sparse_matches(n_spanss: list[list[list[int]]], labels: list[list[int]]) -> Tensor:
     offsets = torch.tensor([len(n_spans) for n_spans in n_spanss], dtype=torch.long).cumsum(dim=-1).roll(1, 0)
     offsets[0] = 0
     return torch.tensor([noun_id + offsets[b] for b, sentence in enumerate(labels) for noun_id in sentence])
+
+
+def dense_matches(predictions: Tensor, vn_mask: Tensor) -> list[list[int]]:
+    def boundary(_verb: Tensor) -> tuple[int, int]:
+        nz = _verb.nonzero().squeeze().tolist()
+        return nz[0], nz[-1]
+    matches = iter(predictions.argmax(dim=-1).tolist())
+    return [[next(matches) - offset for _ in vs]
+            for offset, vs in groupby([boundary(verb) for verb in vn_mask], key=lambda b: b[0])]
 
 
 class SparseAtn(torch.nn.Module):
@@ -56,15 +70,28 @@ class SparseAtn(torch.nn.Module):
 
 
 class SparseVA(torch.nn.Module):
-    def __init__(self, dim: int, selection_h: int, model_name: str, freeze: bool = True):
+    def __init__(self, dim: int, selection_h: int, bert_name: str, freeze: bool):
         super(SparseVA, self).__init__()
-        self.bert_model = AutoModel.from_pretrained(model_name)
+        self.bert_model = AutoModel.from_pretrained(bert_name)
         self.freeze = freeze
         if self.freeze:
             for p in self.bert_model.parameters():
                 p.requires_grad = False
+        self.v_aggr = GlobalAttention(gate_nn=torch.nn.Linear(dim, 1))
+        self.n_aggr = GlobalAttention(gate_nn=torch.nn.Linear(dim, 1))
         self.x_atn = SparseAtn(dim, selection_h)
 
-    def forward(self, input_ids, input_masks, v_spanss: list[list[list[int]]], n_spanss: list[list[list[int]]]):
+    def forward(
+            self,
+            input_ids: Tensor,
+            input_masks: Tensor,
+            v_spanss: list[list[list[int]]], n_spanss: list[list[list[int]]]) -> tuple[Tensor, Tensor]:
         embeddings = self.bert_model(input_ids, attention_mask=input_masks)[0]                  # B x S x D
-        return find_matches(embeddings, input_masks, v_spanss, n_spanss, self.x_atn)            # (num_verbs, num_nouns)
+        return find_matches(
+            bert_outputs=embeddings,
+            mask=input_masks,
+            v_spanss=v_spanss,
+            n_spanss=n_spanss,
+            verb_aggr_fn=self.v_aggr,
+            noun_aggr_fn=self.n_aggr,
+            x_atn_fn=self.x_atn)

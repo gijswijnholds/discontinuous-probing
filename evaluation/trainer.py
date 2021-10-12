@@ -1,11 +1,11 @@
 from tqdm import tqdm
 import torch
-from torch.nn.utils.rnn import pad_sequence as pad_sequence
+from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from torch import LongTensor, Tensor, no_grad
 from typing import Callable
 from .preprocessing import ProcessedSample
-from .sparse import sparse_matches
+from .sparse import sparse_matches, dense_matches
 
 
 def sequence_collator(word_pad: int) -> \
@@ -40,17 +40,19 @@ class Trainer:
                  word_pad: int,
                  optim_constructor: type,
                  lr: float,
-                 loss_fn: torch.nn.Module):
+                 loss_fn: torch.nn.Module,
+                 device: str):
         self.batch_size_train = batch_size_train
         self.batch_size_val = batch_size_val
         self.batch_size_test = batch_size_test
+        self.device = device
         self.train_loader = DataLoader(train_dataset, batch_size=batch_size_train,
                                        shuffle=True, collate_fn=sequence_collator(word_pad))
         self.val_loader = DataLoader(val_dataset, batch_size=batch_size_val,
-                                     shuffle=True, collate_fn=sequence_collator(word_pad))
+                                     shuffle=False, collate_fn=sequence_collator(word_pad))
         self.test_loader = DataLoader(test_dataset, batch_size=batch_size_test,
-                                      shuffle=True, collate_fn=sequence_collator(word_pad))
-        self.model = model
+                                      shuffle=False, collate_fn=sequence_collator(word_pad))
+        self.model = model.to(device)
         self.optimizer = optim_constructor(self.model.parameters(), lr=lr)
         self.loss_fn = loss_fn
 
@@ -58,7 +60,7 @@ class Trainer:
                     noun_spans: list[list[list[int]]], ys: LongTensor) -> tuple[float, float]:
         self.model.train()
 
-        predictions = self.model.forward(input_ids, input_masks, verb_spans, noun_spans)
+        predictions, _ = self.model.forward(input_ids, input_masks, verb_spans, noun_spans)
         batch_loss = self.loss_fn(predictions, ys)
         accuracy = compute_accuracy(predictions, ys)
         batch_loss.backward()
@@ -66,17 +68,14 @@ class Trainer:
         self.optimizer.zero_grad()
         return batch_loss.item(), accuracy
 
-    def train_epoch(self, device: str, epoch_i: int):
+    def train_epoch(self, epoch_i: int):
         epoch_loss, epoch_accuracy = 0., 0.
         with tqdm(self.train_loader, unit="batch") as tepoch:
             for input_ids, input_masks, verb_spans, n_spans, ys in tepoch:
                 tepoch.set_description(f"Epoch {epoch_i}")
 
-                input_ids.to(device)
-                input_masks.to(device)
-                ys.to(device)
-
-                loss, accuracy = self.train_batch(input_ids, input_masks, verb_spans, n_spans, ys)
+                loss, accuracy = self.train_batch(input_ids.to(self.device), input_masks.to(self.device),
+                                                  verb_spans, n_spans, ys.to(self.device))
 
                 tepoch.set_postfix(loss=loss, accuracy=accuracy)
 
@@ -89,39 +88,51 @@ class Trainer:
                    noun_spans: list[list[list[int]]], ys: LongTensor) -> tuple[float, float]:
         self.model.eval()
 
-        predictions = self.model.forward(input_ids, input_masks, verb_spans, noun_spans)
+        predictions, _ = self.model.forward(input_ids, input_masks, verb_spans, noun_spans)
         batch_loss = self.loss_fn(predictions, ys)
         accuracy = compute_accuracy(predictions, ys)
 
         return batch_loss.item(), accuracy
 
-    def eval_epoch(self, eval_set: str, device: str, epoch_i: int):
+    def eval_epoch(self, eval_set: str, epoch_i: int):
         epoch_loss, epoch_accuracy = 0., 0.
-        loader = {'train': self.train_loader, 'val': self.val_loader, 'test': self.test_loader}[eval_set]   # ?
+        loader = self.val_loader if eval_set == 'val' else self.test_loader
         batch_counter = 0
         with tqdm(loader, unit="batch") as tepoch:
+            tepoch.set_description(f"Epoch {epoch_i}")
             for input_ids, input_masks, verb_spans, n_spans, ys in tepoch:
-                tepoch.set_description(f"Epoch {epoch_i}")
                 batch_counter += 1
-                input_ids.to(device)
-                input_masks.to(device)
-                ys.to(device)
-                loss, accuracy = self.eval_batch(input_ids, input_masks, verb_spans, n_spans, ys)
+                loss, accuracy = self.eval_batch(input_ids.to(self.device), input_masks.to(self.device),
+                                                 verb_spans, n_spans, ys.to(self.device))
                 tepoch.set_postfix(loss=loss, accuracy=accuracy)
                 epoch_loss += loss
                 epoch_accuracy += accuracy
         return epoch_loss / len(loader), epoch_accuracy / len(loader)
 
-    def main_loop(self, num_epochs: int, device: str, val_every: int = 1):
+    @no_grad()
+    def predict_batch(self, input_ids: LongTensor, input_masks: LongTensor, verb_spans: list[list[list[int]]],
+                      noun_spans: list[list[list[int]]]) -> list[list[int]]:
+        self.model.eval()
+        predictions, vn_mask = self.model.forward(input_ids, input_masks, verb_spans, noun_spans)
+        return dense_matches(predictions, vn_mask)
+
+    @no_grad()
+    def predict_epoch(self) -> list[list[int]]:
+        return [label
+                for input_ids, input_masks, v_spans, n_spans, _ in self.test_loader
+                for label in self.predict_batch(input_ids.to(self.device), input_masks.to(self.device),
+                                                v_spans, n_spans)]
+
+    def main_loop(self, num_epochs: int, val_every: int = 1):
         results = {i+1: {} for i in range(num_epochs)}
         for e in range(num_epochs):
             print(f"Epoch {e+1}...")
-            train_loss, train_acc = self.train_epoch(device=device, epoch_i=e+1)
+            train_loss, train_acc = self.train_epoch(epoch_i=e+1)
             print(f"Train loss {train_loss:.5f}, Train accuracy: {train_acc:.5f}")
-            if (e % val_every == 0 and e != 0) or e == num_epochs:
-                val_loss, val_acc = self.eval_epoch(eval_set='val', device=device, epoch_i=e+1)
+            if (e % val_every == 0 and e != 0) or e == (num_epochs - 1):
+                val_loss, val_acc = self.eval_epoch(eval_set='val', epoch_i=e+1)
                 print(f"Val loss {val_loss:.5f}, Val accuracy: {val_acc:.5f}")
-                test_loss, test_acc = self.eval_epoch(eval_set='test', device=device, epoch_i=e+1)
+                test_loss, test_acc = self.eval_epoch(eval_set='test', epoch_i=e+1)
                 print(f"Test loss {test_loss:.5f}, Test accuracy: {test_acc:.5f}")
             else:
                 val_loss, val_acc, test_loss, test_acc = None, None, None, None
