@@ -29,12 +29,21 @@ def expand_tags(word_tokens: list[list[str]], taglists: list[list[int]]) -> list
     return [[0] + sum([[tag] * word_lens[i] for i, tag in enumerate(taglist)], []) + [0] for taglist in taglists]
 
 
+def capitalize_and_punctuate(vss: list[list[int]], nss: list[list[int]], ws: list[str]) \
+        -> tuple[list[list[int]], list[list[int]], list[str]]:
+    def capitalize(_iw: tuple[int, str]) -> str:
+        _i, _w = _iw
+        return _w if _i != 0 else _w[0].upper() + _w[1:]
+    return [vs + [0] for vs in vss], [ns + [0] for ns in nss],  [capitalize(iw) for iw in enumerate(ws)] + ['.']
+
+
 def tokenize_compact(
         tokenizer: TOKENIZER_MAPPING,
         compact_sample: CompactSample) -> ProcessedSample:
-    word_tokens = list(map(lambda w: tokenizer.tokenize(w), compact_sample.sentence))
-    noun_spans = expand_tags(word_tokens, compact_sample.n_spans)
-    verb_spans = expand_tags(word_tokens, compact_sample.v_spans)
+    vs, ns, ws = capitalize_and_punctuate(compact_sample.v_spans, compact_sample.n_spans, compact_sample.sentence)
+    word_tokens = list(map(lambda w: tokenizer.tokenize(w), ws))
+    noun_spans = expand_tags(word_tokens, ns)
+    verb_spans = expand_tags(word_tokens, vs)
     tokens = [1] + tokenizer.convert_tokens_to_ids(sum(word_tokens, [])) + [2]
     return ProcessedSample(tokens, verb_spans, noun_spans, compact_sample)
 
