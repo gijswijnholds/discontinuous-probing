@@ -16,7 +16,7 @@ def setup_trainer(grammar_file: str, bert_name: str, freeze: bool, device: str) 
                    batch_size_train=32, batch_size_val=128, batch_size_test=128,
                    word_pad=3,
                    optim_constructor=AdamW,
-                   lr=1e-05,
+                   lr=1e-04,
                    loss_fn=CrossEntropyLoss(),
                    device=device)
 
@@ -24,5 +24,5 @@ def setup_trainer(grammar_file: str, bert_name: str, freeze: bool, device: str) 
 def run_trainer(grammar_file: str, bert_name: str, freeze: bool, device: str = 'cuda', num_repeats: int = 1):
     results = dict()
     for i in range(num_repeats):
-        results[i] = setup_trainer(grammar_file, bert_name, freeze).main_loop(15, device=device, val_every=5)
+        results[i] = setup_trainer(grammar_file, bert_name, freeze, device=device).main_loop(15, val_every=5)
     return results
