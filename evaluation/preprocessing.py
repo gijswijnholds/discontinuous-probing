@@ -56,15 +56,6 @@ def tokenize_compacts(
     return [tokenize(sample) for sample in data]
 
 
-def prepare_datasets(fn: str) -> list[list[ProcessedSample], ...]:
-    print("Preparing datasets...")
-    datasets = read_grammar(fn)
-    print("Getting tokenizer...")
-    tokenizer = create_tokenizer()
-    print("Tokenizing data...")
-    return [tokenize_compacts(tokenizer, dataset) for dataset in datasets]
-
-
 class SpanDataset(Dataset):
     def __init__(self, data: list[ProcessedSample]):
         self.data = data
@@ -77,3 +68,11 @@ class SpanDataset(Dataset):
     def __getitem__(self, i: int) -> ProcessedSample:
         return self.data[i]
 
+
+def prepare_datasets(fn: str) -> list[SpanDataset]:
+    print("Preparing datasets...")
+    datasets = read_grammar(fn)
+    print("Getting tokenizer...")
+    tokenizer = create_tokenizer()
+    print("Tokenizing data...")
+    return [SpanDataset(tokenize_compacts(tokenizer, dataset)) for dataset in datasets]

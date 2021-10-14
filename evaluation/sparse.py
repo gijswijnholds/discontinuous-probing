@@ -1,8 +1,9 @@
 import torch
 from torch import Tensor
 from transformers import AutoModel
-from typing import Sequence, Callable
+from typing import Callable
 from torch_geometric.nn import GlobalAttention
+from torch.nn import Dropout
 from itertools import groupby
 
 
@@ -56,21 +57,22 @@ def dense_matches(predictions: Tensor, vn_mask: Tensor) -> list[list[int]]:
 
 
 class SparseAtn(torch.nn.Module):
-    def __init__(self, dim: int, hidden: int):
+    def __init__(self, dim: int, hidden: int, dropout: float):
         super(SparseAtn, self).__init__()
         self.selection_q = torch.nn.Linear(dim, hidden, bias=False)
         self.selection_k = torch.nn.Linear(dim, hidden, bias=False)
+        self.dropout = Dropout(dropout)
 
     def forward(self, qs: Tensor, ks: Tensor, mask: Tensor):
-        qs = self.selection_q(qs)                   # Q x H
-        ks = self.selection_k(ks)                   # K x H
+        qs = self.dropout(self.selection_q(qs))     # Q x H
+        ks = self.dropout(self.selection_k(ks))     # K x H
         x_atn = qs @ ks.t()                         # Q x K
         x_atn[mask.eq(0)] = -1e-10
         return x_atn
 
 
 class SparseVA(torch.nn.Module):
-    def __init__(self, dim: int, selection_h: int, bert_name: str, freeze: bool):
+    def __init__(self, dim: int, selection_h: int, bert_name: str, freeze: bool, dropout: float = 0.1):
         super(SparseVA, self).__init__()
         self.bert_model = AutoModel.from_pretrained(bert_name)
         self.freeze = freeze
@@ -79,14 +81,15 @@ class SparseVA(torch.nn.Module):
                 p.requires_grad = False
         self.v_aggr = GlobalAttention(gate_nn=torch.nn.Linear(dim, 1))
         self.n_aggr = GlobalAttention(gate_nn=torch.nn.Linear(dim, 1))
-        self.x_atn = SparseAtn(dim, selection_h)
+        self.x_atn = SparseAtn(dim, selection_h, dropout)
+        self.dropout = Dropout(dropout)
 
     def forward(
             self,
             input_ids: Tensor,
             input_masks: Tensor,
             v_spanss: list[list[list[int]]], n_spanss: list[list[list[int]]]) -> tuple[Tensor, Tensor]:
-        embeddings = self.bert_model(input_ids, attention_mask=input_masks)[0]                  # B x S x D
+        embeddings = self.dropout(self.bert_model(input_ids, attention_mask=input_masks)[0])        # B x S x D
         return find_matches(
             bert_outputs=embeddings,
             mask=input_masks,

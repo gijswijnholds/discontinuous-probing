@@ -132,11 +132,12 @@ class Trainer:
             if (e % val_every == 0 and e != 0) or e == (num_epochs - 1):
                 val_loss, val_acc = self.eval_epoch(eval_set='val', epoch_i=e+1)
                 print(f"Val loss {val_loss:.5f}, Val accuracy: {val_acc:.5f}")
-                test_loss, test_acc = self.eval_epoch(eval_set='test', epoch_i=e+1)
-                print(f"Test loss {test_loss:.5f}, Test accuracy: {test_acc:.5f}")
+                test_preds = self.predict_epoch()
             else:
-                val_loss, val_acc, test_loss, test_acc = None, None, None, None
+                val_loss, val_acc, test_preds = None, -1, None
             results[e+1] = {'train_loss': train_loss, 'train_acc': train_acc,
                             'val_loss': val_loss, 'val_acc': val_acc,
-                            'test_loss': test_loss, 'test_acc': test_acc}
+                            'test_preds': test_preds}
+        print(f"Best epoch was {max(results, key=lambda k: results[k]['val_acc'])}")
+        results['test_data'] = self.test_loader.dataset
         return results
