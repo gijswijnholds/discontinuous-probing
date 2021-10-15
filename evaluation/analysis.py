@@ -9,7 +9,6 @@ def analysis(experiment, verbose: bool = True):
     test_data: SpanDataset = experiment['test_data']
     best_epoch = max(epochs, key=lambda k: epochs[k]['val_acc'])
     predictions = epochs[best_epoch]['test_preds']
-    print(f'Best epoch was {best_epoch}')
     gbd, gbv, gbn = verb_depth_acc(predictions, [d.compact for d in test_data])
     correct, total, _ = list(zip(*gbd.values()))
     def sort_by_acc(xs): return sorted(xs.items(), key=lambda x: -x[1][-1])
@@ -44,6 +43,10 @@ def verb_depth_acc(pss: list[list[int]], samples: list[CompactSample]) \
 def baseline(pss: list[list[int]]) -> float:
     chance = [1/len(ps) for ps in pss]
     return sum(chance) / len(chance)
+
+
+def avg(ln):
+    return sum(ln) / len(ln)
 
 
 def aggregate(file):
