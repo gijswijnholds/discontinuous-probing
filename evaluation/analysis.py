@@ -46,11 +46,15 @@ def avg(ln):
     return sum(ln) / len(ln)
 
 
-def get_group_agg(results: list, field: str):
-    sort_results = sorted([d_res for res in results for d_res in res[field]], key=lambda r: r[0])
+def agg_result(results: list[tuple[int, tuple]]):
+    sort_results = sorted(results, key=lambda r: r[0])
     grouped_results = {k: [v[1] for v in vs] for k, vs in groupby(sort_results, key=lambda r: r[0])}
     avg_results = {k: tuple(map(avg, zip(*vs))) for k, vs in grouped_results.items()}
     return avg_results
+
+
+def get_group_agg(results: list, field: str):
+    return agg_result([d_res for res in results for d_res in res[field]])
 
 
 def merge_results(all_results: list[dict]) -> dict:
@@ -78,28 +82,45 @@ def aggregate(file: str):
 
 def show_results(results: dict):
     names, data_seeds = list(zip(*results.keys()))
-    names, data_seeds = set(names), set(data_seeds)
+    names = ['vocab', 'depth', 'rule', 'all']
+    data_seeds = sorted(list(set(data_seeds)))
     for name in names:
-        print(name)
         print('=' * 64)
-
-        d_accs = [{'acc_by_depth': results[(name, dseed)]['acc_by_depth']} for dseed in data_seeds]
-        n_accs = [{'acc_by_num_nouns': results[(name, dseed)]['acc_by_num_nouns']} for dseed in data_seeds]
-        agg_acc_by_depth = get_group_agg(d_accs, 'acc_by_depth')
-        agg_acc_by_num_nouns = get_group_agg(n_accs, 'acc_by_num_nouns')
+        print(name.upper())
+        print('=' * 64)
+        d_accs = [d_acc for dseed in data_seeds for d_acc in results[(name, dseed)]['acc_by_depth'].items()]
+        n_accs = [n_acc for dseed in data_seeds for n_acc in results[(name, dseed)]['acc_by_num_nouns'].items()]
+        agg_acc_by_depth = agg_result(d_accs)
+        agg_acc_by_num_nouns = agg_result(n_accs)
         agg_baseline = avg([results[(name, data_seed)]['baseline'] for data_seed in data_seeds]),
         correct, total, _ = tuple(map(avg, zip(*[results[(name, data_seed)]['total'] for data_seed in data_seeds])))
         best_epochs = [best_epoch for dseed in data_seeds for best_epoch in results[(name, dseed)]['best_epochs']]
-        print('=' * 64)
         print('Accuracy by depth:')
-        print('\n'.join([f'{d}:\t{c}\t{t}\t({a:0.2f})' for d, (c, t, a) in agg_acc_by_depth.items()]))
+        print('\n'.join([f'{d}:\t{c:1.0f}\t{t:1.0f}\t({a:0.2f})' for d, (c, t, a) in agg_acc_by_depth.items()]))
         print('=' * 64)
         print('Accuracy by number of nouns:')
-        print('\n'.join([f'{d}:\t{c}\t{t}\t({a:0.2f})' for d, (c, t, a) in agg_acc_by_num_nouns.items()]))
+        print('\n'.join([f'{d}:\t{c:1.0f}\t{t:1.0f}\t({a:0.2f})' for d, (c, t, a) in agg_acc_by_num_nouns.items()]))
         print('=' * 64)
         print('Best epochs:')
         print(best_epochs)
+        print('=' * 64)
         print('Aggregated baseline:')
-        print(agg_baseline)
+        print(round(agg_baseline[0], 2))
         print('Average accuracy:')
-        print({correct/total})
+        print(round(correct/total, 2))
+    print('=' * 64)
+    print('=' * 64)
+    print('=' * 64)
+    print('Results for verbs (exp, seed)')
+    for name in names:
+        for data_seed in data_seeds:
+            print('=' * 64)
+            print(f'{name.upper()}\t(Seed: {data_seed})')
+            print('=' * 64)
+            verb_results = results[(name, data_seed)]['acc_by_verb']
+            print('\n'.join([f'{d[0]}\t{round(d[1][2], 2)}' for d in verb_results.items()]))
+    print('=' * 64)
+    print('=' * 28 + ' THE END ' + '=' * 27)
+    print('=' * 64)
+
+
