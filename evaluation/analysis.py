@@ -118,7 +118,8 @@ def show_results(results: dict):
             print(f'{name.upper()}\t(Seed: {data_seed})')
             print('=' * 64)
             verb_results = results[(name, data_seed)]['acc_by_verb']
-            print('\n'.join([f'{d[0]}\t{round(d[1][2], 2)}' for d in verb_results.items()]))
+            print('\n'.join([f'{d[0]}\t{round(d[1][2], 2)}' for d in sorted(verb_results.items(),
+                                                                            key=lambda x: x[1][-1])]))
     print('=' * 64)
     print('=' * 28 + ' THE END ' + '=' * 27)
     print('=' * 64)
