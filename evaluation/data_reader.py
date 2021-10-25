@@ -1,24 +1,18 @@
 from typing import Optional as Maybe
 from typing import Union, NamedTuple
 import json
+import pickle
 
 Matching = dict[int, int]
 Realized = list[tuple[list[int], list[int], str]]
-example_fn = './data/grammars/example_control.p'
-# train_example_fn = './data/grammars/example_cluster_train.txt'
-# dev_example_fn = './data/grammars/example_cluster_dev.txt'
-# test_example_fn = './data/grammars/example_cluster_test.txt'
-train_example_fn = './data/grammars/example_control_train.txt'
-dev_example_fn = './data/grammars/example_control_dev.txt'
-test_example_fn = './data/grammars/example_control_test.txt'
 
 
 AbsTree = Union[tuple[Maybe[int], Maybe[int], str], tuple['AbsTree', ...]]
 
 
 class CompactSample(NamedTuple):
-    depth:      int
-    abstree:    AbsTree
+    depth:      Maybe[int]
+    abstree:    Maybe[AbsTree]
     sentence:   list[str]
     n_spans:    list[list[int]]
     v_spans:    list[list[int]]
@@ -65,3 +59,13 @@ def read_grammar(grammar_fn: str) -> list[list[CompactSample]]:
         data = json.load(inf)
     return makes_samples(process_grammar(data))
 
+
+def read_lassy(lassy_fn: str) -> list[list[CompactSample]]:
+    with open(lassy_fn, 'rb') as f:
+        subsets = pickle.load(f)
+    return [[CompactSample(None, None, s, n, v, l) for s, n, v, l in subset]
+            for subset in subsets]
+
+
+def read_file(file: str) -> list[list[CompactSample]]:
+    return read_grammar(file) if file.endswith('json') else read_lassy(file)

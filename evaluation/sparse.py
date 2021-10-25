@@ -84,6 +84,15 @@ class SparseVA(torch.nn.Module):
         self.x_atn = SparseAtn(dim, selection_h, dropout)
         self.dropout = Dropout(dropout)
 
+    def save(self, fn: str):
+        if not self.freeze:
+            raise NotImplementedError
+        torch.save({k: v for k, v in self.state_dict().items() if 'bert_model' not in k}, fn)
+
+    def load(self, fn):
+        sdict = torch.load(fn, map_location='cpu')
+        self.load_state_dict(sdict, strict=False)
+
     def forward(
             self,
             input_ids: Tensor,

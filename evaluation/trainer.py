@@ -1,11 +1,14 @@
+import os
+
 from tqdm import tqdm
 import torch
 from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from torch import LongTensor, Tensor, no_grad
 from typing import Callable
-from .preprocessing import ProcessedSample
-from .sparse import sparse_matches, dense_matches
+from typing import Optional as Maybe
+from .preprocessing import ProcessedSample, SpanDataset
+from .sparse import sparse_matches, dense_matches, SparseVA
 
 
 def sequence_collator(word_pad: int) -> \
@@ -30,31 +33,33 @@ def compute_accuracy(predictions: Tensor, trues: Tensor) -> float:
 
 class Trainer:
     def __init__(self,
-                 model: torch.nn.Module,
-                 train_dataset: Dataset,
-                 val_dataset: Dataset,
-                 test_dataset: Dataset,
-                 batch_size_train: int,
-                 batch_size_val: int,
-                 batch_size_test: int,
-                 word_pad: int,
-                 optim_constructor: type,
-                 lr: float,
-                 loss_fn: torch.nn.Module,
-                 device: str):
+                 name: str,
+                 model: SparseVA,
+                 train_dataset: Maybe[SpanDataset] = None,
+                 val_dataset: Maybe[SpanDataset] = None,
+                 test_dataset: Maybe[SpanDataset] = None,
+                 batch_size_train: Maybe[int] = None,
+                 batch_size_val: Maybe[int] = None,
+                 batch_size_test: Maybe[int] = None,
+                 word_pad: int = 3,
+                 optim_constructor: Maybe[type] = None,
+                 lr: Maybe[float] = None,
+                 loss_fn: Maybe[torch.nn.Module] = None,
+                 device: str = 'cuda'):
+        self.name = name
         self.batch_size_train = batch_size_train
         self.batch_size_val = batch_size_val
         self.batch_size_test = batch_size_test
         self.device = device
-        self.train_loader = DataLoader(train_dataset, batch_size=batch_size_train,
-                                       shuffle=True, collate_fn=sequence_collator(word_pad))
-        self.val_loader = DataLoader(val_dataset, batch_size=batch_size_val,
-                                     shuffle=False, collate_fn=sequence_collator(word_pad))
-        self.test_loader = DataLoader(test_dataset, batch_size=batch_size_test,
-                                      shuffle=False, collate_fn=sequence_collator(word_pad))
+        self.train_loader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True,
+                                       collate_fn=sequence_collator(word_pad)) if train_dataset else None
+        self.val_loader = DataLoader(val_dataset, batch_size=batch_size_val, shuffle=False,
+                                     collate_fn=sequence_collator(word_pad)) if val_dataset else None
+        self.test_loader = DataLoader(test_dataset, batch_size=batch_size_test, shuffle=False,
+                                      collate_fn=sequence_collator(word_pad)) if test_dataset else None
         self.model = model.to(device)
-        self.optimizer = optim_constructor(self.model.parameters(), lr=lr)
-        self.loss_fn = loss_fn
+        self.optimizer = optim_constructor(self.model.parameters(), lr=lr) if optim_constructor else None
+        self.loss_fn = loss_fn if loss_fn else None
 
     def train_batch(self, input_ids: LongTensor, input_masks: LongTensor, verb_spans: list[list[list[int]]],
                     noun_spans: list[list[list[int]]], ys: LongTensor) -> tuple[float, float]:
@@ -68,17 +73,13 @@ class Trainer:
         self.optimizer.zero_grad()
         return batch_loss.item(), accuracy
 
-    def train_epoch(self, epoch_i: int):
+    def train_epoch(self):
         epoch_loss, epoch_accuracy = 0., 0.
         with tqdm(self.train_loader, unit="batch") as tepoch:
             for input_ids, input_masks, verb_spans, n_spans, ys in tepoch:
-                tepoch.set_description(f"Epoch {epoch_i}")
-
                 loss, accuracy = self.train_batch(input_ids.to(self.device), input_masks.to(self.device),
                                                   verb_spans, n_spans, ys.to(self.device))
-
                 tepoch.set_postfix(loss=loss, accuracy=accuracy)
-
                 epoch_loss += loss
                 epoch_accuracy += accuracy
         return epoch_loss / len(self.train_loader), epoch_accuracy / len(self.train_loader)
@@ -94,12 +95,11 @@ class Trainer:
 
         return batch_loss.item(), accuracy
 
-    def eval_epoch(self, eval_set: str, epoch_i: int):
+    def eval_epoch(self, eval_set: str):
         epoch_loss, epoch_accuracy = 0., 0.
         loader = self.val_loader if eval_set == 'val' else self.test_loader
         batch_counter = 0
         with tqdm(loader, unit="batch") as tepoch:
-            tepoch.set_description(f"Epoch {epoch_i}")
             for input_ids, input_masks, verb_spans, n_spans, ys in tepoch:
                 batch_counter += 1
                 loss, accuracy = self.eval_batch(input_ids.to(self.device), input_masks.to(self.device),
@@ -123,21 +123,47 @@ class Trainer:
                 for label in self.predict_batch(input_ids.to(self.device), input_masks.to(self.device),
                                                 v_spans, n_spans)]
 
-    def main_loop(self, num_epochs: int, val_every: int = 1):
-        results = {i+1: {} for i in range(num_epochs)}
+    def train_loop(self, num_epochs: int, val_every: int = 1, save_at_best: bool = False):
+        results = dict()
         for e in range(num_epochs):
-            print(f"Epoch {e+1}...")
-            train_loss, train_acc = self.train_epoch(epoch_i=e+1)
+            print(f"Epoch {e}...")
+            train_loss, train_acc = self.train_epoch()
             print(f"Train loss {train_loss:.5f}, Train accuracy: {train_acc:.5f}")
-            if ((e+1) % val_every == 0 and e != 0) or e == (num_epochs - 1):
-                val_loss, val_acc = self.eval_epoch(eval_set='val', epoch_i=e+1)
+            if (e % val_every == 0 and e != 0) or e == num_epochs - 1:
+                val_loss, val_acc = self.eval_epoch(eval_set='val')
                 print(f"Val loss {val_loss:.5f}, Val accuracy: {val_acc:.5f}")
-                test_preds = self.predict_epoch()
+                if save_at_best and val_acc > max([v['val_acc'] for v in results.values()]):
+                    for file in os.listdir('./'):
+                        if file.startswith(f'{self.name}'):
+                            os.remove(file)
+                    self.model.save(f'{self.name}_{e}')
             else:
-                val_loss, val_acc, test_preds = None, -1, None
-            results[e+1] = {'train_loss': train_loss, 'train_acc': train_acc,
-                            'val_loss': val_loss, 'val_acc': val_acc,
-                            'test_preds': test_preds}
+                val_loss, val_acc = None, -1
+            results[e] = {'train_loss': train_loss, 'train_acc': train_acc,
+                          'val_loss': val_loss, 'val_acc': val_acc}
         print(f"Best epoch was {max(results, key=lambda k: results[k]['val_acc'])}")
-        results['test_data'] = self.test_loader.dataset
         return results
+
+
+def make_pretrainer(
+        name: str,
+        model: SparseVA,
+        train_dataset: SpanDataset,
+        val_dataset: SpanDataset,
+        batch_size_train: int,
+        batch_size_val: int,
+        optim_constructor: type,
+        lr: float,
+        loss_fn: torch.nn.Module,
+        device: str = 'cuda') -> Trainer:
+    return Trainer(name=name, model=model, train_dataset=train_dataset, val_dataset=val_dataset,
+                   batch_size_train=batch_size_train, batch_size_val=batch_size_val,
+                   optim_constructor=optim_constructor, lr=lr, loss_fn=loss_fn, device=device)
+
+
+def make_tester(
+        name: str,
+        model: SparseVA,
+        test_dataset: SpanDataset,
+        batch_size_test: int) -> Trainer:
+    return Trainer(name=name, model=model, test_dataset=test_dataset, batch_size_test=batch_size_test)

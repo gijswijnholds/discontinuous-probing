@@ -1,6 +1,6 @@
 from transformers import AutoTokenizer, TOKENIZER_MAPPING
 from .model_names import bertje_name
-from .data_reader import CompactSample, read_grammar
+from .data_reader import CompactSample, read_file
 from typing import NamedTuple
 from torch.utils.data import Dataset
 
@@ -69,10 +69,9 @@ class SpanDataset(Dataset):
         return self.data[i]
 
 
-def prepare_datasets(fn: str) -> list[SpanDataset]:
-    print("Preparing datasets...")
-    datasets = read_grammar(fn)
+def prepare_datasets(data_file: str) -> list[SpanDataset]:
+    sample_lists = read_file(data_file)
     print("Getting tokenizer...")
     tokenizer = create_tokenizer()
     print("Tokenizing data...")
-    return [SpanDataset(tokenize_compacts(tokenizer, dataset)) for dataset in datasets]
+    return [SpanDataset(tokenize_compacts(tokenizer, samples)) for samples in sample_lists]
