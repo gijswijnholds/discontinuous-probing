@@ -170,5 +170,6 @@ def make_tester(
         name: str,
         model: SparseVA,
         test_dataset: SpanDataset,
-        batch_size_test: int) -> Trainer:
-    return Trainer(name=name, model=model, test_dataset=test_dataset, batch_size_test=batch_size_test)
+        batch_size_test: int,
+        device: str) -> Trainer:
+    return Trainer(name=name, model=model, test_dataset=test_dataset, batch_size_test=batch_size_test, device=device)

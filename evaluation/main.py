@@ -37,9 +37,7 @@ def setup_trainer(
             lr=1e-04,
             loss_fn=CrossEntropyLoss(),
             device=device)
-    # assert len(datasets) == 1
     test_ds = datasets[-1]
-    # test_ds = sum(datasets, [])
     assert model_path is not None
     model.load(model_path)
     model.to(device)
@@ -47,7 +45,8 @@ def setup_trainer(
         name=f'{bert_name.split("/")[-1]}_{seed}',
         model=model,
         test_dataset=test_ds,
-        batch_size_test=128)
+        batch_size_test=128,
+        device=device)
 
 
 def pretrain_probes(data_file: str, bert_name: str, device: str = 'cuda', num_repeats: int = 1):
