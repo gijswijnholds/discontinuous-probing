@@ -5,7 +5,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
 from torch import LongTensor, Tensor, no_grad
-from typing import Callable
+from typing import Callable, Any
 from typing import Optional as Maybe
 from .preprocessing import ProcessedSample, SpanDataset
 from .sparse import sparse_matches, dense_matches, SparseVA
@@ -61,12 +61,15 @@ class Trainer:
         self.optimizer = optim_constructor(self.model.parameters(), lr=lr) if optim_constructor else None
         self.loss_fn = loss_fn if loss_fn else None
 
-    def train_batch(self, input_ids: LongTensor, input_masks: LongTensor, verb_spans: list[list[list[int]]],
-                    noun_spans: list[list[list[int]]], ys: LongTensor) -> tuple[float, float]:
+    def train_batch(
+            self,
+            batch: tuple[LongTensor, LongTensor, list[list[list[int]]], list[[list[int]]], LongTensor]) \
+            -> tuple[float, float]:
         self.model.train()
-
-        predictions, _ = self.model.forward(input_ids, input_masks, verb_spans, noun_spans)
-        batch_loss = self.loss_fn(predictions, ys)
+        input_ids, input_masks, verb_spans, noun_spans, ys = batch
+        predictions, _ = self.model.forward(
+            input_ids.to(self.device), input_masks.to(self.device), verb_spans, noun_spans)
+        batch_loss = self.loss_fn(predictions, ys := ys.to(self.device))
         accuracy = compute_accuracy(predictions, ys)
         batch_loss.backward()
         self.optimizer.step()
@@ -76,9 +79,8 @@ class Trainer:
     def train_epoch(self):
         epoch_loss, epoch_accuracy = 0., 0.
         with tqdm(self.train_loader, unit="batch") as tepoch:
-            for input_ids, input_masks, verb_spans, n_spans, ys in tepoch:
-                loss, accuracy = self.train_batch(input_ids.to(self.device), input_masks.to(self.device),
-                                                  verb_spans, n_spans, ys.to(self.device))
+            for batch in tepoch:
+                loss, accuracy = self.train_batch(batch)
                 tepoch.set_postfix(loss=loss, accuracy=accuracy)
                 epoch_loss += loss
                 epoch_accuracy += accuracy
@@ -114,7 +116,7 @@ class Trainer:
     @no_grad()
     def predict_batch(
             self,
-            batch: tuple[LongTensor, LongTensor, list[list[list[int]]], list[[list[int]]], LongTensor]) \
+            batch: tuple[LongTensor, LongTensor, list[list[list[int]]], list[[list[int]]], Any]) \
             -> list[list[int]]:
         self.model.eval()
         input_ids, input_masks, verb_spans, noun_spans, _ = batch
