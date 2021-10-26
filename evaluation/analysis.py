@@ -16,7 +16,7 @@ def analysis(test_data: SpanDataset, predictions: list[list[int]]):
             'acc_by_depth': sort_by_key(gbd),
             'acc_by_verb': sort_by_acc(gbv),
             'acc_by_#nouns': sort_by_key(gbn),
-            'baseline': baseline(predictions),
+            'baseline': baseline([(len(c.n_spans), len(c.labels)) for c in cs]),
             'acc_by_tree': sort_by_acc(gbt),
             'acc_by_rule': sort_by_acc(gbr)}
 
@@ -49,13 +49,10 @@ def rule_acc(pss: list[list[int]], samples: list[CompactSample]):
     return {k: (c := sum(vs), ln := len(vs), c/ln) for k, vs in gbr}
 
 
-def baseline(pss: list[list[int]]) -> float:
-    chance = [1/len(ps) for ps in pss]
-    return sum(chance) / len(chance)
+def baseline(nss: list[tuple[int, int]]) -> float:
+    chances = [1/ns for ns, vs in nss for _ in range(vs)]
+    return sum(chances) / len(chances)
 
-
-# def avg(ln):
-#     return sum(ln) / len(ln)
 #
 #
 # def agg_result(results: list[tuple[int, tuple]]):
