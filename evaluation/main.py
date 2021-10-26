@@ -50,15 +50,6 @@ def setup_trainer(
         batch_size_test=128)
 
 
-#
-# def run_trainer(data_file: str, bert_name: str, freeze: bool, device: str = 'cuda', num_repeats: int = 1):
-#     results = dict()
-#     for i in range(num_repeats):
-#         trainer = setup_trainer(data_file, bert_name, freeze, device=device, seed=GLOBAL_SEEDS[i])
-#         results[i] = trainer.train_loop(80, val_every=5)
-#     return results
-
-
 def pretrain_probes(data_file: str, bert_name: str, device: str = 'cuda', num_repeats: int = 1):
     for i in range(num_repeats):
         trainer = setup_trainer(data_file, bert_name, True, device=device, seed=GLOBAL_SEEDS[i])

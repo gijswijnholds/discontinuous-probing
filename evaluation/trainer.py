@@ -85,12 +85,15 @@ class Trainer:
         return epoch_loss / len(self.train_loader), epoch_accuracy / len(self.train_loader)
 
     @no_grad()
-    def eval_batch(self, input_ids: LongTensor, input_masks: LongTensor, verb_spans: list[list[list[int]]],
-                   noun_spans: list[list[list[int]]], ys: LongTensor) -> tuple[float, float]:
+    def eval_batch(
+            self,
+            batch: tuple[LongTensor, LongTensor, list[list[list[int]]], list[[list[int]]], LongTensor]) \
+            -> tuple[float, float]:
         self.model.eval()
-
-        predictions, _ = self.model.forward(input_ids, input_masks, verb_spans, noun_spans)
-        batch_loss = self.loss_fn(predictions, ys)
+        input_ids, input_masks, verb_spans, noun_spans, ys = batch
+        predictions, _ = self.model.forward(
+            input_ids.to(self.device), input_masks.to(self.device), verb_spans, noun_spans)
+        batch_loss = self.loss_fn(predictions, ys := ys.to(self.device))
         accuracy = compute_accuracy(predictions, ys)
 
         return batch_loss.item(), accuracy
@@ -100,28 +103,28 @@ class Trainer:
         loader = self.val_loader if eval_set == 'val' else self.test_loader
         batch_counter = 0
         with tqdm(loader, unit="batch") as tepoch:
-            for input_ids, input_masks, verb_spans, n_spans, ys in tepoch:
+            for batch in tepoch:
                 batch_counter += 1
-                loss, accuracy = self.eval_batch(input_ids.to(self.device), input_masks.to(self.device),
-                                                 verb_spans, n_spans, ys.to(self.device))
+                loss, accuracy = self.eval_batch(batch)
                 tepoch.set_postfix(loss=loss, accuracy=accuracy)
                 epoch_loss += loss
                 epoch_accuracy += accuracy
         return epoch_loss / len(loader), epoch_accuracy / len(loader)
 
     @no_grad()
-    def predict_batch(self, input_ids: LongTensor, input_masks: LongTensor, verb_spans: list[list[list[int]]],
-                      noun_spans: list[list[list[int]]]) -> list[list[int]]:
+    def predict_batch(
+            self,
+            batch: tuple[LongTensor, LongTensor, list[list[list[int]]], list[[list[int]]], LongTensor]) \
+            -> list[list[int]]:
         self.model.eval()
-        predictions, vn_mask = self.model.forward(input_ids, input_masks, verb_spans, noun_spans)
+        input_ids, input_masks, verb_spans, noun_spans, _ = batch
+        predictions, vn_mask = self.model.forward(
+            input_ids.to(self.device), input_masks.to(self.device), verb_spans, noun_spans)
         return dense_matches(predictions, vn_mask)
 
     @no_grad()
     def predict_epoch(self) -> list[list[int]]:
-        return [label
-                for input_ids, input_masks, v_spans, n_spans, _ in self.test_loader
-                for label in self.predict_batch(input_ids.to(self.device), input_masks.to(self.device),
-                                                v_spans, n_spans)]
+        return [label for batch in self.test_loader for label in self.predict_batch(batch)]
 
     def train_loop(self, num_epochs: int, val_every: int = 1, save_at_best: bool = False):
         results = dict()

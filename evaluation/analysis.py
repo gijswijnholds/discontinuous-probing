@@ -1,18 +1,24 @@
 from .preprocessing import CompactSample, SpanDataset
+from .data_reader import abstree_to_rules, labeled_to_abstree
 from itertools import groupby
+from operator import eq
 from typing import Any
 
 
 def analysis(test_data: SpanDataset, predictions: list[list[int]]):
-    gbd, gbv, gbn = verb_depth_acc(predictions, [d.compact for d in test_data])
+    gbd, gbv, gbn = verb_depth_acc(predictions, cs := [d.compact for d in test_data])
+    gbt = tree_acc(predictions, cs)
+    gbr = rule_acc(predictions, cs)
     correct, total, _ = list(zip(*gbd.values()))
     def sort_by_acc(xs): return sorted(xs.items(), key=lambda x: -x[1][-1])
     def sort_by_key(xs): return sorted(xs.items(), key=lambda x: x[0])
-    return {'acc_by_depth': sort_by_key(gbd),
+    return {'total': (sum(correct), sum(total), sum(correct) / sum(total)),
+            'acc_by_depth': sort_by_key(gbd),
             'acc_by_verb': sort_by_acc(gbv),
             'acc_by_#nouns': sort_by_key(gbn),
             'baseline': baseline(predictions),
-            'total': (sum(correct), sum(total), sum(correct)/sum(total))}
+            'acc_by_tree': sort_by_acc(gbt),
+            'acc_by_rule': sort_by_acc(gbr)}
 
 
 def verb_depth_acc(pss: list[list[int]], samples: list[CompactSample]) \
@@ -26,6 +32,21 @@ def verb_depth_acc(pss: list[list[int]], samples: list[CompactSample]) \
     return ({k: (c := sum(vs), ln := len(vs), c/ln) for k, vs in gbd if len(vs)},
             {k: (c := sum(vs), ln := len(vs), c / ln) for k, vs in gbv if len(vs)},
             {k: (c := sum(vs), ln := len(vs), c / ln) for k, vs in gbn if len(vs)})
+
+
+def tree_acc(pss: list[list[int]], samples: list[CompactSample]):
+    all_preds = [(eq(ps, sample.labels), sample.abstree) for ps, sample in zip(pss, samples)]
+
+    gbt = [(k, [v[0] for v in vs]) for k, vs in groupby(sorted(all_preds, key=lambda x: str(x[-1])),
+                                                        key=lambda x: x[-1])]
+    return {k: (c := sum(vs), ln := len(vs), c/ln) for k, vs in gbt}
+
+
+def rule_acc(pss: list[list[int]], samples: list[CompactSample]):
+    all_preds = [(eq(ps, sample.labels), rule) for ps, sample in zip(pss, samples)
+                 for rule in abstree_to_rules(sample.abstree)]
+    gbr = [(k, [v[0] for v in vs]) for k, vs in groupby(sorted(all_preds, key=lambda x: x[-1]), key=lambda x: x[-1])]
+    return {k: (c := sum(vs), ln := len(vs), c/ln) for k, vs in gbr}
 
 
 def baseline(pss: list[list[int]]) -> float:

@@ -50,7 +50,10 @@ def sparse_matches(n_spanss: list[list[list[int]]], labels: list[list[int]]) -> 
 def dense_matches(predictions: Tensor, vn_mask: Tensor) -> list[list[int]]:
     def boundary(_verb: Tensor) -> tuple[int, int]:
         nz = _verb.nonzero().squeeze().tolist()
-        return nz[0], nz[-1]
+        try:
+            return nz[0], nz[-1]
+        except:
+            raise ValueError
     matches = iter(predictions.argmax(dim=-1).tolist())
     return [[next(matches) - offset for _ in vs]
             for offset, vs in groupby([boundary(verb) for verb in vn_mask], key=lambda b: b[0])]
