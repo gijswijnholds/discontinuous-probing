@@ -20,7 +20,7 @@ class ProcessedSample(NamedTuple):
         assert self.tokens[0] == 1 and self.tokens[-1] == 2
 
 
-def create_tokenizer(tokenizer_name=bertje_name) -> TOKENIZER_MAPPING:
+def create_tokenizer(tokenizer_name: str = bertje_name) -> TOKENIZER_MAPPING:
     return AutoTokenizer.from_pretrained(tokenizer_name)
 
 
@@ -69,9 +69,9 @@ class SpanDataset(Dataset):
         return self.data[i]
 
 
-def prepare_datasets(data_file: str) -> list[SpanDataset]:
+def prepare_datasets(data_file: str, model_name: str = bertje_name) -> list[SpanDataset]:
     sample_lists = read_file(data_file)
     print("Getting tokenizer...")
-    tokenizer = create_tokenizer()
+    tokenizer = create_tokenizer(model_name)
     print("Tokenizing data...")
     return [SpanDataset(tokenize_compacts(tokenizer, samples)) for samples in sample_lists]

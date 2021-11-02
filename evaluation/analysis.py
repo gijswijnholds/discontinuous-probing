@@ -23,7 +23,7 @@ def analysis(test_data: SpanDataset, predictions: list[list[int]]):
 
 def verb_depth_acc(pss: list[list[int]], samples: list[CompactSample]) \
         -> tuple[dict[Any, tuple[int, int, float]], ...]:
-    all_preds = [(' '.join([sample.sentence[idx] for idx in sample.v_spans[i] if idx == 1]),
+    all_preds = [(' '.join([sample.sentence[idx] for idx in sample.v_spans[i] if sample.v_spans[i][idx] == 1]),
                   p == sample.labels[i], sample.depth, len(sample.n_spans))
                  for sample, ps in zip(samples, pss) for i, p in enumerate(ps)]
     gbv = [(k, [v[1] for v in vs]) for k, vs in groupby(sorted(all_preds, key=lambda x: x[0]), lambda x: x[0])]
