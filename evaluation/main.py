@@ -21,6 +21,7 @@ def setup_trainer(
         device: str,
         seed: int = 42,
         model_path: Maybe[str] = None) -> Trainer:
+    word_pad_id = 3 if bert_name == bertje_name else 1 if bert_name == robbert_name else None
     torch.manual_seed(seed)
     model = SparseVA(bert_name=bert_name, freeze=freeze, dim=768, selection_h=128)
     datasets = prepare_datasets(data_path, bert_name)
@@ -36,7 +37,8 @@ def setup_trainer(
             optim_constructor=AdamW,
             lr=1e-04,
             loss_fn=CrossEntropyLoss(),
-            device=device)
+            device=device,
+            word_pad_id=word_pad_id)
     test_ds = datasets[-1]
     assert model_path is not None
     model.load(model_path)
@@ -46,7 +48,8 @@ def setup_trainer(
         model=model,
         test_dataset=test_ds,
         batch_size_test=128,
-        device=device)
+        device=device,
+        word_pad_id=word_pad_id)
 
 
 def pretrain_probes(data_file: str, bert_name: str, device: str = 'cuda', num_repeats: int = 1):

@@ -17,7 +17,6 @@ class ProcessedSample(NamedTuple):
         assert set(map(len, self.verb_spans)) == set(map(len, self.noun_spans))
         assert set(sum(self.verb_spans, []) + sum(self.noun_spans, [])) == {0, 1}
         assert len(self.tokens) == len(self.verb_spans[0])
-        assert self.tokens[0] == 1 and self.tokens[-1] == 2
 
 
 def create_tokenizer(tokenizer_name: str = bertje_name) -> TOKENIZER_MAPPING:
@@ -40,11 +39,13 @@ def capitalize_and_punctuate(vss: list[list[int]], nss: list[list[int]], ws: lis
 def tokenize_compact(
         tokenizer: TOKENIZER_MAPPING,
         compact_sample: CompactSample) -> ProcessedSample:
+    cls_token_id = tokenizer.cls_token_id
+    sep_token_id = tokenizer.sep_token_id
     vs, ns, ws = capitalize_and_punctuate(compact_sample.v_spans, compact_sample.n_spans, compact_sample.sentence)
     word_tokens = list(map(lambda w: tokenizer.tokenize(w), ws))
     noun_spans = expand_tags(word_tokens, ns)
     verb_spans = expand_tags(word_tokens, vs)
-    tokens = [1] + tokenizer.convert_tokens_to_ids(sum(word_tokens, [])) + [2]
+    tokens = [cls_token_id] + tokenizer.convert_tokens_to_ids(sum(word_tokens, [])) + [sep_token_id]
     return ProcessedSample(tokens, verb_spans, noun_spans, compact_sample)
 
 

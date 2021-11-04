@@ -1,8 +1,13 @@
 from .preprocessing import CompactSample, SpanDataset
-from .data_reader import abstree_to_rules, labeled_to_abstree
+from .data_reader import abstree_to_rules
 from itertools import groupby
 from operator import eq
 from typing import Any
+from math import sqrt
+
+
+def sort_by_acc(xs): return sorted(xs.items(), key=lambda x: -x[1][-1])
+def sort_by_key(xs): return sorted(xs.items(), key=lambda x: x[0])
 
 
 def analysis(test_data: SpanDataset, predictions: list[list[int]]):
@@ -10,28 +15,28 @@ def analysis(test_data: SpanDataset, predictions: list[list[int]]):
     gbt = tree_acc(predictions, cs)
     gbr = rule_acc(predictions, cs)
     correct, total, _ = list(zip(*gbd.values()))
-    def sort_by_acc(xs): return sorted(xs.items(), key=lambda x: -x[1][-1])
-    def sort_by_key(xs): return sorted(xs.items(), key=lambda x: x[0])
     return {'total': (sum(correct), sum(total), sum(correct) / sum(total)),
-            'acc_by_depth': sort_by_key(gbd),
-            'acc_by_verb': sort_by_acc(gbv),
-            'acc_by_#nouns': sort_by_key(gbn),
+            'acc_by_depth': gbd,
+            'acc_by_verb': gbv,
+            'acc_by_#nouns': gbn,
             'baseline': baseline([(len(c.n_spans), len(c.labels)) for c in cs]),
-            'acc_by_tree': sort_by_acc(gbt),
-            'acc_by_rule': sort_by_acc(gbr)}
+            'acc_by_tree': gbt,
+            'acc_by_rule': gbr}
 
 
 def verb_depth_acc(pss: list[list[int]], samples: list[CompactSample]) \
         -> tuple[dict[Any, tuple[int, int, float]], ...]:
-    all_preds = [(' '.join([sample.sentence[idx] for idx in sample.v_spans[i] if sample.v_spans[i][idx] == 1]),
-                  p == sample.labels[i], sample.depth, len(sample.n_spans))
-                 for sample, ps in zip(samples, pss) for i, p in enumerate(ps)]
-    gbv = [(k, [v[1] for v in vs]) for k, vs in groupby(sorted(all_preds, key=lambda x: x[0]), lambda x: x[0])]
-    gbd = [(k, [v[1] for v in vs]) for k, vs in groupby(sorted(all_preds, key=lambda x: x[-2]), lambda x: x[-2])]
-    gbn = [(k, [v[1] for v in vs]) for k, vs in groupby(sorted(all_preds, key=lambda x: x[-1]), lambda x: x[-1])]
-    return ({k: (c := sum(vs), ln := len(vs), c/ln) for k, vs in gbd if len(vs)},
-            {k: (c := sum(vs), ln := len(vs), c / ln) for k, vs in gbv if len(vs)},
-            {k: (c := sum(vs), ln := len(vs), c / ln) for k, vs in gbn if len(vs)})
+    all_preds = [
+        (' '.join([s for idx, s in enumerate(sample.sentence) if sample.v_spans[i][idx] == 1]),
+         p == sample.labels[i], sample.depth, len(sample.n_spans))
+        for sample, ps in zip(samples, pss) for i, p in enumerate(ps)]
+
+    def gb(key: int):
+        return [(k, [v[1] for v in vs]) for k, vs in groupby(sorted(all_preds, key=lambda x: x[key]), lambda x: x[key])]
+
+    return ({k: (c := sum(vs), ln := len(vs), c/ln) for k, vs in gb(-2) if len(vs)},
+            {k: (c := sum(vs), ln := len(vs), c / ln) for k, vs in gb(0) if len(vs)},
+            {k: (c := sum(vs), ln := len(vs), c / ln) for k, vs in gb(-1) if len(vs)})
 
 
 def tree_acc(pss: list[list[int]], samples: list[CompactSample]):
@@ -53,30 +58,21 @@ def baseline(nss: list[tuple[int, int]]) -> float:
     chances = [1/ns for ns, vs in nss for _ in range(vs)]
     return sum(chances) / len(chances)
 
-#
-#
-# def agg_result(results: list[tuple[int, tuple]]):
-#     sort_results = sorted(results, key=lambda r: r[0])
-#     grouped_results = {k: [v[1] for v in vs] for k, vs in groupby(sort_results, key=lambda r: r[0])}
-#     avg_results = {k: tuple(map(avg, zip(*vs))) for k, vs in grouped_results.items()}
-#     return avg_results
-#
-#
-# def get_group_agg(results: list, field: str):
-#     return agg_result([d_res for res in results for d_res in res[field]])
-#
-#
-# def merge_results(all_results: list[dict]) -> dict:
-#     merged_results = dict()
-#
-#     merged_results['acc_by_depth'] = get_group_agg(all_results, 'acc_by_depth')
-#     merged_results['acc_by_verb'] = get_group_agg(all_results, 'acc_by_verb')
-#     merged_results['acc_by_num_nouns'] = get_group_agg(all_results, 'acc_by_num_nouns')
-#     merged_results['baseline'] = avg([res['baseline'] for res in all_results])
-#     merged_results['total'] = tuple(map(avg, zip(*[res['total'] for res in all_results])))
-#     merged_results['best_epochs'] = [res['best_epoch'] for res in all_results]
-#     return merged_results
-#
+
+def agg_torch_seeds(results: dict[str, dict[str, Any]]):
+    def merge(xs):
+        if isinstance(xs[0], (float, int)):
+            return (mu := sum(xs)/len(xs)), sqrt(sum([(x-mu) ** 2 for x in xs])/len(xs))
+        if isinstance(xs[0], tuple):
+            return tuple(map(merge, zip(*xs)))
+        if isinstance(xs[0], dict):
+            return {k: merge([x[k] for x in xs]) for k in xs[0].keys()}
+        raise TypeError(f'Cannot merge {type(xs[0])}')
+
+    seeds = [results[s] for s in results if s != 'dataset']
+    metrics = [k for k in seeds[0].keys()]
+    return {metric: merge([seed[metric] for seed in seeds]) for metric in metrics}
+
 #
 # def aggregate(file: str):
 #     with open(file, 'rb') as in_file:
