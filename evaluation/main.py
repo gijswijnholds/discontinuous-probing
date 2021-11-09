@@ -5,7 +5,7 @@ import torch
 from .sparse import SparseVA
 from .preprocessing import prepare_datasets
 from .trainer import Trainer, make_pretrainer, make_tester, Maybe, SpanDataset
-from .analysis import analysis
+from .analysis import analysis, agg_torch_seeds
 from .model_names import bertje_name, robbert_name
 
 from torch.nn import CrossEntropyLoss
@@ -76,4 +76,5 @@ def do_everything(data_dir: str, bert_names: list[str], weight_dir: str, device:
                 bdw, test_data = test_probe(f'{data_dir}/{data_file}', bert_name, f'{weight_dir}/{weight_path}', device)
                 results[bert_name][data_file][weight_path] = bdw
                 results[bert_name][data_file]['dataset'] = test_data
+            results[bert_name][data_file] = agg_torch_seeds(results[bert_name][data_file])
     return results

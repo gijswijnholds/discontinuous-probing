@@ -19,18 +19,36 @@ def labeled_to_abstree(ltree: LabeledTree) -> AbsTree:
     return labeled_to_abstree(root), tuple(map(labeled_to_abstree, children))
 
 
+def get_aroot(_a: AbsTree) -> str:
+    return _a if isinstance(_a, str) else _a[0]
+
+
 def abstree_to_rules(atree: AbsTree) -> set[Rule]:
-    def get_root(_a: AbsTree) -> str:
-        return _a if isinstance(_a, str) else _a[0]
     if isinstance(atree, str):
         return set()
     root, children = atree
-    return {(root, tuple(get_root(c) for c in children))}.union(rule for c in children for rule in abstree_to_rules(c))
+    return {(root, tuple(get_aroot(c) for c in children))}.union(rule for c in children for rule in abstree_to_rules(c))
+
+
+def get_lroot(_ltree: LabeledTree) -> tuple[Maybe[int], Maybe[int], str]:
+    return _ltree if len(_ltree) == 3 else _ltree[0]
+
+
+def labtree_to_branches(ltree: LabeledTree) -> list[tuple[str, tuple[tuple[Maybe[int], Maybe[int], str], ...]]]:
+
+    if len(ltree) == 3:
+        return []
+    root, children = ltree
+    return [(root[-1], tuple(get_lroot(c) for c in children))] + sum([labtree_to_branches(c) for c in children], [])
+
+
+def branch_to_rule(branch: tuple[str, tuple[tuple[Maybe[int], Maybe[int], str], ...]]) -> Rule:
+    return branch[0], tuple(map(lambda c: c[-1], branch[1]))
 
 
 class CompactSample(NamedTuple):
     depth:      Maybe[int]
-    abstree:    Maybe[LabeledTree]
+    labtree:    Maybe[LabeledTree]
     sentence:   list[str]
     n_spans:    list[list[int]]
     v_spans:    list[list[int]]
@@ -44,7 +62,7 @@ def fix_matching(matching: dict[str, int]) -> Matching:
 def process_grammar(
         data: dict[str, dict[str, tuple[dict[str, int], list[str]]]]) \
         -> list[tuple[int, LabeledTree, Matching, Realized]]:
-    return [(int(depth), labeled_to_abstree(eval(abstree)), fix_matching(data[depth][abstree][0]), eval(surface))
+    return [(int(depth), eval(abstree), fix_matching(data[depth][abstree][0]), eval(surface))
             for depth in data for abstree in data[depth] for surface in data[depth][abstree][1]]
 
 
@@ -53,9 +71,6 @@ def expand_spans(idss: list[list[int]], idx: int):
 
 
 def make_sample(depth: int, abstree: LabeledTree, matching: Matching, realization: Realized) -> CompactSample:
-    """Given a realization (a list of constituents with their noun/verb indications, a matching from verbs to nouns,
-    and the special index for the verb, we generate multiple data samples (one for each verb), for the model to train
-    on. The format is: (sentence, noun spans, [(verb_span, label), ...])"""
     nss, vss, ws = zip(*realization)
     n_ids = set(sum(nss, []))
     v_ids = set(sum(vss, []))
