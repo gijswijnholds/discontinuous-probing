@@ -27,6 +27,7 @@ def setup_trainer(
     datasets = prepare_datasets(data_path, bert_name)
     if len(datasets) == 2:
         train_ds, val_ds = datasets
+        model.load(model_path)
         return make_pretrainer(
             name=f'{bert_name.split("/")[-1]}_{seed}',
             model=model,

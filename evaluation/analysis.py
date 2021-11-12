@@ -61,7 +61,7 @@ def tree_acc(pss: list[list[int]], samples: list[CompactSample]):
     gbt = [(k, [v[1] for v in vs])
            for k, vs in groupby(sorted(all_preds, key=lambda x: str(labeled_to_abstree(x[0]))),
                                 key=lambda x: str(labeled_to_abstree(x[0])))]
-    return {k: {i: ([v[i][0] for v in vs], vs[0][1]) for i in vs[0]} for k, vs in gbt}
+    return {k: {i: ([v[i][0] for v in vs], vs[0][i][1]) for i in vs[0]} for k, vs in gbt}
 
 
 def consistency(trees: list[dict[int, tuple[list[int], int]]]):
@@ -70,12 +70,11 @@ def consistency(trees: list[dict[int, tuple[list[int], int]]]):
                            key=lambda x: x[1], reverse=True),
          grouped[0][1] / sum([v for _, v in grouped]),
          grouped[0][0] == label)
-        for tree in trees for node, (preds, ((label, _), _)) in tree.items()]
+        for tree in trees for node, (preds, (label, _)) in tree.items()]
     return (
         (mu := sum([c for _, c, _ in tree_consistency]) / len(tree_consistency),
          sqrt(sum([(c-mu) ** 2 for _, c, _ in tree_consistency]) / len(tree_consistency))),
         len([t for _, c, t in tree_consistency if t]) / len(tree_consistency))
-
 
 
 def baseline(nss: list[tuple[int, int]]) -> float:

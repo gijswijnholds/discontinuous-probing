@@ -86,8 +86,9 @@ class SparseVA(torch.nn.Module):
 
     def save(self, fn: str):
         if not self.freeze:
-            raise NotImplementedError
-        torch.save({k: v for k, v in self.state_dict().items() if 'bert_model' not in k}, fn)
+            torch.save({k: v for k, v in self.state_dict().items()}, fn)
+        else:
+            torch.save({k: v for k, v in self.state_dict().items() if 'bert_model' not in k}, fn)
 
     def load(self, fn):
         sdict = torch.load(fn, map_location='cpu')
