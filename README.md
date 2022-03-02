@@ -17,3 +17,4 @@ The code that goes alongside our ACL Findings 2022 paper:
                             'cuda')
 ```
 * Play around with the results as you see fit
+* The code assumes you have generated grammars and data which you can generate using https://github.com/konstantinosKokos/metaclass-cfg
