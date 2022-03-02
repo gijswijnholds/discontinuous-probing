@@ -1,3 +1,9 @@
+# Discontinuous probing
+
+The code that goes alongside our ACL Findings 2022 paper:
+    ``Discontinuous Constituency and BERT: A Case Study of Dutch"
+    
+   
 # Running the code
 * Make a clean virtual environment using python 3.9+
 * Install dependencies: `pip install -r requirements.txt`
