@@ -35,13 +35,13 @@ class Trainer:
     def __init__(self,
                  name: str,
                  model: SparseVA,
+                 word_pad: int,
                  train_dataset: Maybe[SpanDataset] = None,
                  val_dataset: Maybe[SpanDataset] = None,
                  test_dataset: Maybe[SpanDataset] = None,
                  batch_size_train: Maybe[int] = None,
                  batch_size_val: Maybe[int] = None,
                  batch_size_test: Maybe[int] = None,
-                 word_pad: int = 3,
                  optim_constructor: Maybe[type] = None,
                  lr: Maybe[float] = None,
                  loss_fn: Maybe[torch.nn.Module] = None,
@@ -153,6 +153,7 @@ class Trainer:
 def make_pretrainer(
         name: str,
         model: SparseVA,
+        word_pad_id: int,
         train_dataset: SpanDataset,
         val_dataset: SpanDataset,
         batch_size_train: int,
@@ -163,13 +164,15 @@ def make_pretrainer(
         device: str = 'cuda') -> Trainer:
     return Trainer(name=name, model=model, train_dataset=train_dataset, val_dataset=val_dataset,
                    batch_size_train=batch_size_train, batch_size_val=batch_size_val,
-                   optim_constructor=optim_constructor, lr=lr, loss_fn=loss_fn, device=device)
+                   optim_constructor=optim_constructor, lr=lr, loss_fn=loss_fn, device=device, word_pad=word_pad_id)
 
 
 def make_tester(
         name: str,
         model: SparseVA,
+        word_pad_id: int,
         test_dataset: SpanDataset,
         batch_size_test: int,
         device: str) -> Trainer:
-    return Trainer(name=name, model=model, test_dataset=test_dataset, batch_size_test=batch_size_test, device=device)
+    return Trainer(name=name, model=model, test_dataset=test_dataset,
+                   batch_size_test=batch_size_test, device=device, word_pad=word_pad_id)
