@@ -67,7 +67,7 @@ class SparseAtn(torch.nn.Module):
         qs = self.dropout(self.selection_q(qs))     # Q x H
         ks = self.dropout(self.selection_k(ks))     # K x H
         x_atn = qs @ ks.t()                         # Q x K
-        x_atn[mask.eq(0)] = -1e-10
+        x_atn[mask.eq(0)] = -1e10
         return x_atn
 
 
