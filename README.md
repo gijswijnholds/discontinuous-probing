@@ -5,7 +5,7 @@ The code that goes alongside our ACL Findings 2022 paper:
     
     
 ```
-@inproceedings{wijnholds2019evaluating,
+@inproceedings{kogkalidis2022discontinuous,
   title = "Discontinuous Constituency and BERT: A Case Study of Dutch",
   author = "Konstantinos Kogkalidis and Gijs Wijnholds",
   year = "2022",
