@@ -1,7 +1,18 @@
 # Discontinuous probing
 
 The code that goes alongside our ACL Findings 2022 paper:
-    ``Discontinuous Constituency and BERT: A Case Study of Dutch"
+    ``Discontinuous Constituency and BERT: A Case Study of Dutch".
+    
+    
+```
+@inproceedings{wijnholds2019evaluating,
+  title = "Discontinuous Constituency and BERT: A Case Study of Dutch",
+  author = "Konstantinos Kogkalidis and Gijs Wijnholds",
+  year = "2022",
+  booktitle={Findings of ACL 2022},
+  publisher={Association for Computational Linguistics}
+}
+```
     
    
 # Running the code
