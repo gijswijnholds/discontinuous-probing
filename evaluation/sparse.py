@@ -47,13 +47,17 @@ def sparse_matches(n_spanss: list[list[list[int]]], labels: list[list[int]]) -> 
     return torch.tensor([noun_id + offsets[b] for b, sentence in enumerate(labels) for noun_id in sentence])
 
 
-def dense_matches(predictions: Tensor, vn_mask: Tensor) -> list[list[int]]:
-    def boundary(_verb: Tensor) -> int:
-        nz = _verb.nonzero().squeeze().tolist()
-        return nz[0] if isinstance(nz, list) else nz
-    matches = iter(predictions.argmax(dim=-1).tolist())
-    return [[next(matches) - offset for _ in vs]
-            for offset, vs in groupby([boundary(verb) for verb in vn_mask])]
+def dense_matches(predictions: Tensor, vn_mask: Tensor) -> list[list[list[bool]]]:
+    """
+    :param predictions: Verbs x Nouns tensor of scores
+    :param vn_mask: Verbs x Nouns tensor of boolean values
+    :return: num_sents x num_verbs_per_sent x num_nouns_per_sent
+    """
+    rounded = predictions.round().bool()
+    num_verbs_per_sent = [len(list(g)) for _, g in groupby(vn_mask.tolist())]
+    all_predictions = [rounded[i][verb_mask.ne(0)].tolist() for i, verb_mask in enumerate(vn_mask)]
+    offset = 0
+    return [all_predictions[offset:(offset := offset + num_v)] for num_v in num_verbs_per_sent]
 
 
 class SparseAtn(torch.nn.Module):

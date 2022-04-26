@@ -31,6 +31,18 @@ def compute_accuracy(predictions: Tensor, trues: Tensor) -> float:
     return (torch.sum(trues == torch.argmax(predictions, dim=1)) / float(len(predictions))).item()
 
 
+def compute_stats(predictions: Tensor, trues: Tensor) -> dict[str, float]:
+    rounded = predictions.round()
+    true_positives = torch.sum(rounded * trues).item()
+    predicted_positives = torch.sum(rounded).item()
+    all_relevants = torch.sum(trues).item()
+    precision = true_positives / predicted_positives
+    recall = true_positives / all_relevants
+    f1 = 2 * precision * recall / (precision + recall)
+    accuracy = rounded.eq(trues).sum().item() / len(rounded)
+    return {'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy}
+
+
 class Trainer:
     def __init__(self,
                  name: str,
@@ -64,36 +76,37 @@ class Trainer:
     def train_batch(
             self,
             batch: tuple[LongTensor, LongTensor, list[list[list[int]]], list[[list[int]]], LongTensor]) \
-            -> tuple[float, float]:
+            -> tuple[float, dict[str, float], Tensor, Tensor]:
         self.model.train()
         input_ids, input_masks, verb_spans, noun_spans, ys = batch
-        predictions, _ = self.model.forward(
+        predictions, output_mask = self.model.forward(
             input_ids.to(self.device), input_masks.to(self.device), verb_spans, noun_spans)
-        batch_loss = self.loss_fn(predictions, ys := ys.to(self.device))
-        accuracy = compute_accuracy(predictions, ys)
+        batch_loss = self.loss_fn(predictions := predictions[output_mask], ys := ys[output_mask].to(self.device))
+        stats = compute_stats(predictions, ys)
         batch_loss.backward()
         self.optimizer.step()
         self.optimizer.zero_grad()
         return batch_loss.item(), accuracy
 
-    def train_epoch(self):
-        epoch_loss, epoch_accuracy = 0., 0.
+    def train_epoch(self) -> tuple[float, dict[str, float]]:
+        epoch_loss, epoch_preds, epoch_trues = 0., torch.tensor([]), torch.tensor([])
         with tqdm(self.train_loader, unit="batch") as tepoch:
             for batch in tepoch:
-                loss, accuracy = self.train_batch(batch)
-                tepoch.set_postfix(loss=loss, accuracy=accuracy)
+                loss, stats, preds, trues = self.train_batch(batch)
+                tepoch.set_postfix(loss=loss, stats=stats)
                 epoch_loss += loss
-                epoch_accuracy += accuracy
-        return epoch_loss / len(self.train_loader), epoch_accuracy / len(self.train_loader)
+                epoch_preds = torch.cat((epoch_preds, preds), 1)
+                epoch_trues = torch.cat((epoch_trues, trues), 1)
+        return epoch_loss / len(self.train_loader), compute_stats(epoch_preds, epoch_trues)
 
     @no_grad()
     def eval_batch(
             self,
             batch: tuple[LongTensor, LongTensor, list[list[list[int]]], list[[list[int]]], LongTensor]) \
-            -> tuple[float, float]:
+            -> tuple[float, Tensor, Tensor]:
         self.model.eval()
         input_ids, input_masks, verb_spans, noun_spans, ys = batch
-        predictions, _ = self.model.forward(
+        predictions, output_mask = self.model.forward(
             input_ids.to(self.device), input_masks.to(self.device), verb_spans, noun_spans)
         batch_loss = self.loss_fn(predictions, ys := ys.to(self.device))
         accuracy = compute_accuracy(predictions, ys)
@@ -101,7 +114,7 @@ class Trainer:
         return batch_loss.item(), accuracy
 
     def eval_epoch(self, eval_set: str):
-        epoch_loss, epoch_accuracy = 0., 0.
+        epoch_loss, epoch_preds, epoch_trues = 0., torch.tensor([]), torch.tensor([])
         loader = self.val_loader if eval_set == 'val' else self.test_loader
         batch_counter = 0
         with tqdm(loader, unit="batch") as tepoch:
@@ -143,10 +156,16 @@ class Trainer:
                             os.remove(file)
                     self.model.save(f'{self.name}_{e}')
             else:
-                val_loss, val_acc = None, -1
-            results[e] = {'train_loss': train_loss, 'train_acc': train_acc,
-                          'val_loss': val_loss, 'val_acc': val_acc}
-        print(f"Best epoch was {max(results, key=lambda k: results[k]['val_acc'])}")
+                val_loss, val_stats = None, {'loss': -1, 'f1': -1, 'precision': -1, 'recall': -1}
+            results[e] = {'train_loss': train_loss,
+                          'train_precision': train_stats['precision'],
+                          'train_recall': train_stats['recall'],
+                          'train_f1': train_stats['f1'],
+                          'val_loss': val_loss,
+                          'val_precision': val_stats['precision'],
+                          'val_recall': val_stats['recall'],
+                          'val_f1': val_stats['f1']}
+        print(f"Best epoch was {max(results, key=lambda k: results[k]['val_f1'])}")
         return results
 
 
