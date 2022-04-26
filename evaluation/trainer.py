@@ -86,7 +86,7 @@ class Trainer:
         batch_loss.backward()
         self.optimizer.step()
         self.optimizer.zero_grad()
-        return batch_loss.item(), accuracy
+        return batch_loss.item(), stats, predictions.cpu().detach(), ys.cpu().detach()
 
     def train_epoch(self) -> tuple[float, dict[str, float]]:
         epoch_loss, epoch_preds, epoch_trues = 0., torch.tensor([]), torch.tensor([])
@@ -108,10 +108,8 @@ class Trainer:
         input_ids, input_masks, verb_spans, noun_spans, ys = batch
         predictions, output_mask = self.model.forward(
             input_ids.to(self.device), input_masks.to(self.device), verb_spans, noun_spans)
-        batch_loss = self.loss_fn(predictions, ys := ys.to(self.device))
-        accuracy = compute_accuracy(predictions, ys)
-
-        return batch_loss.item(), accuracy
+        batch_loss = self.loss_fn(predictions := predictions, ys := ys.to(self.device))
+        return batch_loss.item(), predictions.cpu().detach(), ys.cpu.detach()
 
     def eval_epoch(self, eval_set: str):
         epoch_loss, epoch_preds, epoch_trues = 0., torch.tensor([]), torch.tensor([])
@@ -120,17 +118,18 @@ class Trainer:
         with tqdm(loader, unit="batch") as tepoch:
             for batch in tepoch:
                 batch_counter += 1
-                loss, accuracy = self.eval_batch(batch)
-                tepoch.set_postfix(loss=loss, accuracy=accuracy)
+                loss, preds, trues = self.eval_batch(batch)
+                tepoch.set_postfix(loss=loss)
                 epoch_loss += loss
-                epoch_accuracy += accuracy
-        return epoch_loss / len(loader), epoch_accuracy / len(loader)
+                epoch_preds = torch.cat((epoch_preds, preds), 1)
+                epoch_trues = torch.cat((epoch_trues, trues), 1)
+        return epoch_loss / len(loader), compute_stats(epoch_preds, epoch_trues)
 
     @no_grad()
     def predict_batch(
             self,
             batch: tuple[LongTensor, LongTensor, list[list[list[int]]], list[[list[int]]], Any]) \
-            -> list[list[int]]:
+            -> list[list[list[bool]]]:
         self.model.eval()
         input_ids, input_masks, verb_spans, noun_spans, _ = batch
         predictions, vn_mask = self.model.forward(
@@ -138,19 +137,19 @@ class Trainer:
         return dense_matches(predictions, vn_mask)
 
     @no_grad()
-    def predict_epoch(self) -> list[list[int]]:
+    def predict_epoch(self) -> list[list[list[bool]]]:
         return [label for batch in self.test_loader for label in self.predict_batch(batch)]
 
     def train_loop(self, num_epochs: int, val_every: int = 1, save_at_best: bool = False):
         results = dict()
         for e in range(num_epochs):
             print(f"Epoch {e}...")
-            train_loss, train_acc = self.train_epoch()
-            print(f"Train loss {train_loss:.5f}, Train accuracy: {train_acc:.5f}")
+            train_loss, train_stats = self.train_epoch()
+            print(f"Train loss {train_loss:.5f}, Train F1: {train_stats['f1']:.5f}")
             if (e % val_every == 0 and e != 0) or e == num_epochs - 1:
-                val_loss, val_acc = self.eval_epoch(eval_set='val')
-                print(f"Val loss {val_loss:.5f}, Val accuracy: {val_acc:.5f}")
-                if save_at_best and val_acc > max([v['val_acc'] for v in results.values()]):
+                val_loss, val_stats = self.eval_epoch(eval_set='val')
+                print(f"Val loss {val_loss:.5f}, Val F1: {val_stats['f1']:.5f}")
+                if save_at_best and val_stats['f1'] > max([v['val_f1'] for v in results.values()]):
                     for file in os.listdir('./'):
                         if file.startswith(f'{self.name}'):
                             os.remove(file)
