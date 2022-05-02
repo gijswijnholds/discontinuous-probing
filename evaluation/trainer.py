@@ -1,4 +1,5 @@
 import os
+import pdb
 
 from tqdm import tqdm
 import torch
@@ -108,8 +109,8 @@ class Trainer:
         input_ids, input_masks, verb_spans, noun_spans, ys = batch
         predictions, output_mask = self.model.forward(
             input_ids.to(self.device), input_masks.to(self.device), verb_spans, noun_spans)
-        batch_loss = self.loss_fn(predictions := predictions, ys := ys.to(self.device))
-        return batch_loss.item(), predictions.cpu().detach(), ys.cpu.detach()
+        batch_loss = self.loss_fn(predictions := predictions[output_mask], ys := ys[output_mask].to(self.device))
+        return batch_loss.item(), predictions.cpu().detach(), ys.cpu().detach()
 
     def eval_epoch(self, eval_set: str):
         epoch_loss, epoch_preds, epoch_trues = 0., torch.tensor([]), torch.tensor([])
@@ -121,8 +122,8 @@ class Trainer:
                 loss, preds, trues = self.eval_batch(batch)
                 tepoch.set_postfix(loss=loss)
                 epoch_loss += loss
-                epoch_preds = torch.cat((epoch_preds, preds), 1)
-                epoch_trues = torch.cat((epoch_trues, trues), 1)
+                epoch_preds = torch.cat((epoch_preds, preds), 0)
+                epoch_trues = torch.cat((epoch_trues, trues), 0)
         return epoch_loss / len(loader), compute_stats(epoch_preds, epoch_trues)
 
     @no_grad()

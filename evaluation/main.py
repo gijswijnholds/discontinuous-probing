@@ -27,13 +27,16 @@ def setup_trainer(
     datasets = prepare_datasets(data_path, bert_name)
     if len(datasets) == 2:
         train_ds, val_ds = datasets
+        if model_path is not None:
+            model.load(model_path)
+        model.to(device)
         return make_pretrainer(
             name=f'{bert_name.split("/")[-1]}_{seed}',
             model=model,
             train_dataset=train_ds,
             val_dataset=val_ds,
-            batch_size_train=32,
-            batch_size_val=128,
+            batch_size_train=64,
+            batch_size_val=256,
             optim_constructor=AdamW,
             lr=1e-04,
             loss_fn=BCEWithLogitsLoss(),
