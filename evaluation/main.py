@@ -8,7 +8,7 @@ from .trainer import Trainer, make_pretrainer, make_tester, Maybe, SpanDataset
 from .analysis import analysis, agg_torch_seeds
 from .model_names import bertje_name, robbert_name
 
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from torch.optim import AdamW
 
 GLOBAL_SEEDS = [3, 7, 42]
@@ -36,7 +36,7 @@ def setup_trainer(
             batch_size_val=128,
             optim_constructor=AdamW,
             lr=1e-04,
-            loss_fn=CrossEntropyLoss(),
+            loss_fn=BCEWithLogitsLoss(),
             device=device,
             word_pad_id=word_pad_id)
     test_ds = datasets[-1]
