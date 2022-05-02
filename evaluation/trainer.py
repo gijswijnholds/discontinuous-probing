@@ -95,8 +95,8 @@ class Trainer:
                 loss, stats, preds, trues = self.train_batch(batch)
                 tepoch.set_postfix(loss=loss, stats=stats)
                 epoch_loss += loss
-                epoch_preds = torch.cat((epoch_preds, preds), 1)
-                epoch_trues = torch.cat((epoch_trues, trues), 1)
+                epoch_preds = torch.cat((epoch_preds, preds), 0)
+                epoch_trues = torch.cat((epoch_trues, trues), 0)
         return epoch_loss / len(self.train_loader), compute_stats(epoch_preds, epoch_trues)
 
     @no_grad()

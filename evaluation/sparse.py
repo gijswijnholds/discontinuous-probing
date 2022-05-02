@@ -47,7 +47,7 @@ def sparse_matches(labelss: list[list[list[bool]]]) -> Tensor:
 
     def suffix(i: int) -> list[bool]: return [False] * sum(num_nouns_per_sent[:i])
     rows = [suffix(i) + verb for i, sentence in enumerate(labelss) for verb in sentence]
-    return pad_sequence([torch.tensor(row, dtype=torch.long) for row in rows], batch_first=True)
+    return pad_sequence([torch.tensor(row, dtype=torch.float) for row in rows], batch_first=True)
 
 
 def dense_matches(predictions: Tensor, vn_mask: Tensor) -> list[list[list[bool]]]:
