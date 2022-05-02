@@ -32,7 +32,7 @@ def compute_accuracy(predictions: Tensor, trues: Tensor) -> float:
 
 
 def compute_stats(predictions: Tensor, trues: Tensor) -> dict[str, float]:
-    rounded = predictions.round()
+    rounded = torch.nn.Sigmoid()(predictions).round()
     true_positives = torch.sum(rounded * trues).item()
     predicted_positives = torch.sum(rounded).item()
     all_relevants = torch.sum(trues).item()
