@@ -3,6 +3,8 @@ from typing import Union, NamedTuple
 import json
 import pickle
 
+from random import shuffle, seed
+
 Matching = dict[int, int]
 Realized = list[tuple[list[int], list[int], str]]
 
@@ -52,7 +54,7 @@ class CompactSample(NamedTuple):
     sentence:   list[str]
     n_spans:    list[list[int]]
     v_spans:    list[list[int]]
-    labels:     list[int]
+    labels:     list[list[bool]]
 
 
 def fix_matching(matching: dict[str, int]) -> Matching:
@@ -91,10 +93,18 @@ def read_grammar(grammar_fn: str) -> list[list[CompactSample]]:
 
 
 def read_lassy(lassy_fn: str) -> list[list[CompactSample]]:
+    def transpose(xs: list[list[bool]]) -> list[list[bool]]:
+        return [list(x) for x in zip(*xs)]
+
     with open(lassy_fn, 'rb') as f:
-        subsets = pickle.load(f)
-    return [[CompactSample(None, None, s, n, v, l) for s, n, v, l in subset]
-            for subset in subsets]
+        raw = pickle.load(f)
+    compacts = [(CompactSample(None, None, s, n, v, transpose(l)), f) for s, n, v, l, f in raw if len(v) > 0 and len(n) > 0]
+    seed(42)
+    shuffle(compacts)
+    train, dev = compacts[:int(0.8 * len(compacts))], compacts[int(0.8 * len(compacts)):]
+    print(f'{len(train)} training samples, of which {len(list(filter(lambda cf: cf[1], train)))} flagged')
+    print(f'{len(dev)} dev samples, of which {len(list(filter(lambda cf: cf[1], dev)))} flagged')
+    return [[t[0] for t in train], [t[0] for t in dev]]
 
 
 def read_file(file: str) -> list[list[CompactSample]]:

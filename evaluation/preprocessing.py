@@ -13,7 +13,7 @@ class ProcessedSample(NamedTuple):
 
     def check(self):
         assert len(self.verb_spans) == len(self.compact.labels)
-        assert max(self.compact.labels) <= len(self.noun_spans) - 1
+        assert all(len(label) == len(self.noun_spans) for label in self.compact.labels)
         assert set(map(len, self.verb_spans)) == set(map(len, self.noun_spans))
         assert set(sum(self.verb_spans, []) + sum(self.noun_spans, [])) == {0, 1}
         assert len(self.tokens) == len(self.verb_spans[0])

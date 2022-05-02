@@ -4,6 +4,7 @@ from transformers import AutoModel
 from typing import Callable
 from torch_geometric.nn import GlobalAttention
 from torch.nn import Dropout
+from torch.nn.utils.rnn import pad_sequence
 from itertools import groupby
 
 
@@ -41,10 +42,12 @@ def sparse_spans(spanss: list[list[list[int]]], offsets: Tensor) -> tuple[Tensor
     return torch.tensor(batch_idx, device=offsets.device), torch.cat(token_idx), torch.cat(spans), len(split)
 
 
-def sparse_matches(n_spanss: list[list[list[int]]], labels: list[list[int]]) -> Tensor:
-    offsets = torch.tensor([len(n_spans) for n_spans in n_spanss], dtype=torch.long).cumsum(dim=-1).roll(1, 0)
-    offsets[0] = 0
-    return torch.tensor([noun_id + offsets[b] for b, sentence in enumerate(labels) for noun_id in sentence])
+def sparse_matches(labelss: list[list[list[bool]]]) -> Tensor:
+    num_nouns_per_sent = [len(labels[0]) for labels in labelss]
+
+    def suffix(i: int) -> list[bool]: return [False] * sum(num_nouns_per_sent[:i])
+    rows = [suffix(i) + verb for i, sentence in enumerate(labelss) for verb in sentence]
+    return pad_sequence([torch.tensor(row, dtype=torch.long) for row in rows], batch_first=True)
 
 
 def dense_matches(predictions: Tensor, vn_mask: Tensor) -> list[list[list[bool]]]:

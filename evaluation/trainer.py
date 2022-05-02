@@ -22,8 +22,8 @@ def sequence_collator(word_pad: int) -> \
         input_mask = input_ids != word_pad
         verb_spanss = [sample.verb_spans for sample in samples]
         noun_spanss = [sample.noun_spans for sample in samples]
-        labelss = [sample.compact.labels for sample in samples]
-        return input_ids, input_mask, verb_spanss, noun_spanss, sparse_matches(noun_spanss, labelss)
+        labelss: list[list[list[bool]]] = [sample.compact.labels for sample in samples]
+        return input_ids, input_mask, verb_spanss, noun_spanss, sparse_matches(labelss)
     return collate_fn
 
 
