@@ -39,7 +39,7 @@ def compute_stats(predictions: Tensor, trues: Tensor) -> dict[str, float]:
     precision = true_positives / predicted_positives
     recall = true_positives / all_relevants
     f1 = 2 * precision * recall / (precision + recall + -1e-10)
-    accuracy = rounded.eq(trues).sum().item() / len(rounded)
+    accuracy = rounded.eq(trues).sum().item() / rounded.numel()
     return {'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy}
 
 
