@@ -38,7 +38,7 @@ def compute_stats(predictions: Tensor, trues: Tensor) -> dict[str, float]:
     all_relevants = torch.sum(trues).item()
     precision = true_positives / predicted_positives
     recall = true_positives / all_relevants
-    f1 = 2 * precision * recall / (precision + recall)
+    f1 = 2 * precision * recall / (precision + recall + -1e-10)
     accuracy = rounded.eq(trues).sum().item() / len(rounded)
     return {'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy}
 
