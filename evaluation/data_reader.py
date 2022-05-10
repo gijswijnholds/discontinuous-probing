@@ -1,11 +1,11 @@
 from typing import Optional as Maybe
-from typing import Union, NamedTuple
+from typing import Union, NamedTuple, Any
 import json
 import pickle
 
 from random import shuffle, seed
 
-Matching = dict[int, int]
+Matchings = dict[int, list[int]]
 Realized = list[tuple[list[int], list[int], str]]
 
 
@@ -57,14 +57,14 @@ class CompactSample(NamedTuple):
     labels:     list[list[bool]]
 
 
-def fix_matching(matching: dict[str, int]) -> Matching:
-    return {int(k): matching[k] for k in matching}
+def fix_matchings(matching: dict[str, list[Any]]) -> Matchings:
+    return {int(k): list(map(int, vs)) for k, vs in matching.items()}
 
 
 def process_grammar(
-        data: dict[str, dict[str, tuple[dict[str, int], list[str]]]]) \
-        -> list[tuple[int, LabeledTree, Matching, Realized]]:
-    return [(int(depth), eval(abstree), fix_matching(data[depth][abstree][0]), eval(surface))
+        data: dict[str, dict[str, tuple[dict[str, list[Any]], list[str]]]]) \
+        -> list[tuple[int, LabeledTree, Matchings, Realized]]:
+    return [(int(depth), eval(abstree), fix_matchings(data[depth][abstree][0]), eval(surface))
             for depth in data for abstree in data[depth] for surface in data[depth][abstree][1]]
 
 
