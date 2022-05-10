@@ -72,17 +72,20 @@ def expand_spans(idss: list[list[int]], idx: int):
     return [1 if idx in ids else 0 for ids in idss]
 
 
-def make_sample(depth: int, abstree: LabeledTree, matching: Matching, realization: Realized) -> CompactSample:
+def make_sample(depth: int, abstree: LabeledTree, matchings: Matchings, realization: Realized) -> CompactSample:
+    def get_matchings(_verb: int) -> list[bool]:
+        indexed_nouns = matchings[_verb] if _verb in matchings else []
+        return [True if n in indexed_nouns else False for n in range(len(n_ids))]
     nss, vss, ws = zip(*realization)
     n_ids = set(sum(nss, []))
     v_ids = set(sum(vss, []))
     noun_spans = list(map(lambda ni: expand_spans(nss, ni), n_ids))
     verb_spans = list(map(lambda vi: expand_spans(vss, vi), v_ids))
-    labels_out = list(map(lambda k: matching[k], matching))
+    labels_out = list(*zip([get_matchings(verb) for verb in range(len(v_ids))]))
     return CompactSample(depth, abstree, ws, noun_spans, verb_spans, labels_out)
 
 
-def makes_samples(subsets: list[list[tuple[int, LabeledTree, Matching, Realized]]]) -> list[list[CompactSample]]:
+def makes_samples(subsets: list[list[tuple[int, LabeledTree, Matchings, Realized]]]) -> list[list[CompactSample]]:
     return [[make_sample(*s) for s in subset] for subset in subsets]
 
 
