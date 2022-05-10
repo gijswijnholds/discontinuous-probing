@@ -81,7 +81,7 @@ def make_sample(depth: int, abstree: LabeledTree, matchings: Matchings, realizat
     v_ids = set(sum(vss, []))
     noun_spans = list(map(lambda ni: expand_spans(nss, ni), n_ids))
     verb_spans = list(map(lambda vi: expand_spans(vss, vi), v_ids))
-    labels_out = list(*zip([get_matchings(verb) for verb in range(len(v_ids))]))
+    labels_out = [get_matchings(verb) for verb in range(len(v_ids))]
     return CompactSample(depth, abstree, ws, noun_spans, verb_spans, labels_out)
 
 
